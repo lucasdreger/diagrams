@@ -26,25 +26,24 @@ jobs:
 
       - name: Convert .drawio to HTML
         run: |
-          mkdir -p html_files
           for file in $(find . -name '*.drawio'); do
             filename=$(basename "$file" .drawio)
-            npx puppeteer-core html_files/$filename.html <<EOF
-            const fs = require('fs');
-            const puppeteer = require('puppeteer-core');
+            npx puppeteer-core html_files/$filename.html <<-EOF
+              const fs = require('fs');
+              const puppeteer = require('puppeteer-core');
 
-            (async () => {
-              const browser = await puppeteer.launch();
-              const page = await browser.newPage();
-              const content = fs.readFileSync('$file', 'utf8');
-              await page.setContent(content);
-              await page.evaluate(() => {
-                // Add any required JavaScript here
-              });
-              await page.screenshot({ path: 'html_files/' + '$filename' + '.png' });
-              await browser.close();
-            })();
-            EOF
+              (async () => {
+                const browser = await puppeteer.launch();
+                const page = await browser.newPage();
+                const content = fs.readFileSync('$file', 'utf8');
+                await page.setContent(content);
+                await page.evaluate(() => {
+                  // Add any required JavaScript here
+                });
+                await page.screenshot({ path: 'html_files/' + '$filename' + '.png' });
+                await browser.close();
+              })();
+EOF
           done
 
       - name: Commit HTML files
