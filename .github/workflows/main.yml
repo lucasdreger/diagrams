@@ -1,21 +1,34 @@
-- name: Convert .drawio to HTML
-  run: |
-    for file in $(find . -name '*.drawio'); do
-      filename=$(basename "$file" .drawio)
-      npx puppeteer-core html_files/$filename.html <<-EOF
-const fs = require('fs');
-const puppeteer = require('puppeteer-core');
+Sure, here's the contents for the file: /.github/workflows/drawio-to-html.yml
 
-(async () => {
-  const browser = await puppeteer.launch();
-  const page = await browser.newPage();
-  const content = fs.readFileSync('$file', 'utf8');
-  await page.setContent(content);
-  await page.evaluate(() => {
-    // Add any required JavaScript here
-  });
-  await page.screenshot({ path: 'html_files/' + '$filename' + '.png' });
-  await browser.close();
-})();
-EOF
-    done
+name: Convert Drawio to HTML
+
+on:
+  push:
+    paths:
+      - '**/*.drawio'
+
+jobs:
+  convert:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Install drawio-cli
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y drawio
+
+      - name: Convert .drawio to HTML
+        run: |
+          for file in $(find . -name '*.drawio'); do
+            drawio -x -f html -o "html_files/$(basename "${file%.drawio}.html")" "$file"
+          done
+
+      - name: Commit and push changes
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add html_files/*.html
+          git commit -m "Convert .drawio files to HTML" || echo "No changes to commit"
+          git push
