@@ -8,16 +8,18 @@ on:
 jobs:
   convert:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y fuse libfuse2 xvfb
-          wget https://github.com/jgraph/drawio-desktop/releases/download/v21.6.8/drawio-amd64-21.6.8.deb
-          sudo apt install -y ./drawio-amd64-21.6.8.deb
+          sudo apt-get install -y drawio
 
       - name: Create html_files directory
         run: mkdir -p html_files
@@ -27,7 +29,7 @@ jobs:
           for file in $(find . -name '*.drawio'); do
             filename=$(basename "$file")
             output_file="html_files/${filename%.drawio}.html"
-            xvfb-run -a drawio -x -f html --crop -o "$output_file" "$file"
+            drawio -x -f html -o "$output_file" "$file"
           done
 
       - name: Commit and push changes
@@ -37,3 +39,5 @@ jobs:
           git add html_files/*.html
           git commit -m "Auto-convert .drawio files to HTML" || echo "No changes to commit"
           git push
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
