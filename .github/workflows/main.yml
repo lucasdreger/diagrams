@@ -12,12 +12,12 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      - name: Setup Draw.io Desktop
+      - name: Install Draw.io Desktop
         run: |
           wget https://github.com/jgraph/drawio-desktop/releases/download/v21.6.8/drawio-amd64-21.6.8.deb
           sudo apt-get install -y ./drawio-amd64-21.6.8.deb
 
-      - name: Create html_files directory if it doesn't exist
+      - name: Create html_files directory
         run: mkdir -p html_files
 
       - name: Convert .drawio to HTML
@@ -30,7 +30,7 @@ jobs:
 
       - name: Commit and push changes
         run: |
-          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
           git add html_files/*.html
           git commit -m "Auto-convert .drawio files to HTML" || echo "No changes to commit"
