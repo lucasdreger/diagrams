@@ -12,24 +12,18 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v3
-        with:
-          node-version: '16'
-
-      - name: Install draw.io-cli
-        run: npm install -g draw.io-cli
+      - name: Install draw.io Desktop (headless)
+        run: |
+          wget https://github.com/jgraph/drawio-desktop/releases/download/v21.6.8/drawio-x86_64-21.6.8.AppImage
+          chmod +x drawio-x86_64-21.6.8.AppImage
+          sudo mv drawio-x86_64-21.6.8.AppImage /usr/local/bin/drawio
 
       - name: Create html_files directory
         run: mkdir -p html_files
 
       - name: Convert .drawio to HTML
         run: |
-          for file in $(find . -name '*.drawio'); do
-            filename=$(basename "$file")
-            output_file="html_files/${filename%.drawio}.html"
-            drawio-cli -x -f html -o "$output_file" "$file"
-          done
+          xvfb-run --auto-servernum drawio -x -f html --crop -o "html_files/" ./**/*.drawio
 
       - name: Commit and push changes
         run: |
