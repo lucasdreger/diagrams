@@ -1,34 +1,8 @@
-name: Convert .drawio to HTML
-
-on:
-  push:
-    paths:
-      - '**/*.drawio'
-  pull_request:
-    paths:
-      - '**/*.drawio'
-
-jobs:
-  convert:
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v2
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v2
-        with:
-          node-version: '14'
-
-      - name: Install Puppeteer
-        run: npm install puppeteer
-
-      - name: Convert .drawio to HTML
-        run: |
-          for file in $(find . -name '*.drawio'); do
-            filename=$(basename "$file" .drawio)
-            npx puppeteer-core html_files/$filename.html <<-EOF
+- name: Convert .drawio to HTML
+  run: |
+    for file in $(find . -name '*.drawio'); do
+      filename=$(basename "$file" .drawio)
+      npx puppeteer-core html_files/$filename.html <<-EOF
 const fs = require('fs');
 const puppeteer = require('puppeteer-core');
 
@@ -44,12 +18,4 @@ const puppeteer = require('puppeteer-core');
   await browser.close();
 })();
 EOF
-          done
-
-      - name: Commit HTML files
-        run: |
-          git config --global user.name 'GitHub Actions'
-          git config --global user.email 'actions@github.com'
-          git add html_files/*.html
-          git commit -m 'Automated conversion of .drawio files to HTML' || echo "No changes to commit"
-          git push
+    done
