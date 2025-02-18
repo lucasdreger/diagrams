@@ -12,18 +12,23 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      - name: Install draw.io Desktop (headless)
+      - name: Install dependencies
         run: |
-          wget https://github.com/jgraph/drawio-desktop/releases/download/v21.6.8/drawio-x86_64-21.6.8.AppImage
-          chmod +x drawio-x86_64-21.6.8.AppImage
-          sudo mv drawio-x86_64-21.6.8.AppImage /usr/local/bin/drawio
+          sudo apt-get update
+          sudo apt-get install -y fuse libfuse2 xvfb
+          wget https://github.com/jgraph/drawio-desktop/releases/download/v21.6.8/drawio-amd64-21.6.8.deb
+          sudo apt install -y ./drawio-amd64-21.6.8.deb
 
       - name: Create html_files directory
         run: mkdir -p html_files
 
       - name: Convert .drawio to HTML
         run: |
-          xvfb-run --auto-servernum drawio -x -f html --crop -o "html_files/" ./**/*.drawio
+          for file in $(find . -name '*.drawio'); do
+            filename=$(basename "$file")
+            output_file="html_files/${filename%.drawio}.html"
+            xvfb-run -a drawio -x -f html --crop -o "$output_file" "$file"
+          done
 
       - name: Commit and push changes
         run: |
