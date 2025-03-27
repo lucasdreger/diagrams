@@ -38,8 +38,8 @@ jobs:
             output_file="html_files/${dir#./}/${filename%.drawio}.html"
             # Ensure output directory exists
             mkdir -p "$(dirname "$output_file")"
-            # Run with xvfb for headless operation
-            xvfb-run -a drawio -x -f html --crop -o "$output_file" "$file"
+            # Use --embed parameter to include the diagram in a self-contained HTML
+            xvfb-run -a drawio -x -f html --embed --tags --tooltips --crop -o "$output_file" "$file"
             echo "Created: $output_file"
           done
 
