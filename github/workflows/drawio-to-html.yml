@@ -1,0 +1,38 @@
+name: Convert Drawio to HTML
+
+on:
+  push:
+    paths:
+      - '**/*.drawio'
+
+jobs:
+  convert:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+        
+      - name: Setup Draw.io CLI
+        run: |
+          wget https://github.com/jgraph/drawio-desktop/releases/download/v22.1.2/drawio-amd64-22.1.2.deb
+          sudo dpkg -i drawio-amd64-22.1.2.deb
+          
+      - name: Create output directory
+        run: mkdir -p html_files
+          
+      - name: Convert .drawio to HTML
+        run: |
+          for file in $(find . -name '*.drawio'); do
+            echo "Converting $file to HTML"
+            drawio --export --format html --output "html_files/$(basename "${file%.drawio}.html")" "$file"
+          done
+          
+      - name: Commit and push changes
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add html_files/*.html
+          git commit -m "Convert .drawio files to HTML" || echo "No changes to commit"
+          git push

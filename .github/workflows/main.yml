@@ -22,17 +22,29 @@ jobs:
           sudo apt-get install -y wget
           wget https://github.com/jgraph/drawio-desktop/releases/download/v21.6.8/drawio-amd64-21.6.8.deb
           sudo apt install -y ./drawio-amd64-21.6.8.deb
+          sudo apt-get install -y xvfb
 
       - name: Create html_files directory
         run: mkdir -p html_files
 
       - name: Convert .drawio to HTML
         run: |
-          for file in $(find . -name '*.drawio'); do
+          for file in $(find . -name '*.drawio' -not -path "*/\.*" -not -path "*/node_modules/*"); do
+            echo "Processing: $file"
+            dir=$(dirname "$file")
             filename=$(basename "$file")
-            output_file="html_files/${filename%.drawio}.html"
+            # Create directory structure in html_files if needed
+            mkdir -p "html_files/${dir#./}"
+            output_file="html_files/${dir#./}/${filename%.drawio}.html"
+            # Ensure output directory exists
+            mkdir -p "$(dirname "$output_file")"
+            # Run with xvfb for headless operation
             xvfb-run -a drawio -x -f html --crop -o "$output_file" "$file"
+            echo "Created: $output_file"
           done
+
+      - name: List generated HTML files
+        run: find html_files -type f -name "*.html" | sort
 
       - name: Commit and push changes
         env:
@@ -40,6 +52,6 @@ jobs:
         run: |
           git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
-          git add html_files/*.html
+          git add html_files/
           git commit -m "Auto-convert .drawio files to HTML" || echo "No changes to commit"
           git push
