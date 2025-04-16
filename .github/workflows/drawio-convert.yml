@@ -32,6 +32,14 @@ jobs:
       - name: Create output folders
         run: |
           mkdir -p svg_files html_files
+          
+          # Initialize CSV changelogs with headers if they don't exist
+          if [ ! -f "svg_files/CHANGELOG.csv" ]; then
+            echo "Date,User,Action,File,Type" > svg_files/CHANGELOG.csv
+          fi
+          if [ ! -f "html_files/CHANGELOG.csv" ]; then
+            echo "Date,User,Action,File,Type" > html_files/CHANGELOG.csv
+          fi
 
       # Step 4: Convert .drawio files to SVG and wrap them in HTML
       - name: Convert Draw.io files
@@ -87,13 +95,25 @@ jobs:
             echo '</body>' >> "html_files/${base}.html"
             echo '</html>' >> "html_files/${base}.html"
 
-            # Log the changes
-            echo "$(date) - Converted ${base}.drawio to SVG" >> svg_files/CHANGELOG.txt
-            echo "$(date) - Wrapped ${base}.svg to HTML" >> html_files/CHANGELOG.txt
+            # Log the changes in CSV format with date as dd.mm.yyyy and full name
+            # Get the full name of the author (or committer) of the latest commit that modified this file
+            AUTHOR=$(git log -1 --format="%aN" -- "$file" || echo "${{ github.actor }}")
+            FORMATTED_DATE=$(date +"%d.%m.%Y")
+            
+            # Check if SVG already exists to determine if this is a new or modified diagram
+            if [ -f "svg_files/${base}.svg" ]; then
+              CHANGE_TYPE="Modified"
+            else
+              CHANGE_TYPE="New"
+            fi
+            
+            echo "$FORMATTED_DATE,\"$AUTHOR\",Converted,\"${base}.drawio\",\"$CHANGE_TYPE\"" >> svg_files/CHANGELOG.csv
+            echo "$FORMATTED_DATE,\"$AUTHOR\",Wrapped to HTML,\"${base}.svg\",\"$CHANGE_TYPE\"" >> html_files/CHANGELOG.csv
           done
 
       # Step 5: Commit and push changes
       - name: Commit and push changes
+        id: commit_changes
         run: |
           git config --local user.name "github-actions[bot]"
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
@@ -101,8 +121,57 @@ jobs:
           # Only commit if there are changes
           if git diff --staged --quiet; then
             echo "No changes to commit"
+            echo "changes_made=false" >> $GITHUB_OUTPUT
           else
             git commit -m "Auto-converted draw.io files"
             # Use GitHub token for authentication
             git push "https://${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" HEAD:${GITHUB_REF#refs/heads/}
+            echo "changes_made=true" >> $GITHUB_OUTPUT
           fi
+          
+      # Step 6: Send email with changelog (when configured)
+      - name: Send changelog via email
+        if: steps.commit_changes.outputs.changes_made == 'true'
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: ${{ secrets.MAIL_SERVER }}
+          server_port: ${{ secrets.MAIL_PORT }}
+          username: ${{ secrets.MAIL_USERNAME }}
+          password: ${{ secrets.MAIL_PASSWORD }}
+          subject: Diagrams Repository - Changelog Update (${{ github.repository }})
+          body: |
+            Hello Team,
+            
+            Changes have been made to diagrams in the repository.
+            Please find attached the latest changelog.
+            
+            Repository: ${{ github.repository }}
+            Commit: ${{ github.sha }}
+            
+            Regards,
+            GitHub Actions
+          to: ${{ secrets.MAIL_RECIPIENTS }}
+          from: GitHub Actions <${{ secrets.MAIL_USERNAME }}>
+          attachments: ./svg_files/CHANGELOG.csv
+      
+      # Step 6: Send an email with the changelog (if changes were made)
+      - name: Send changelog email
+        if: success() && github.event_name == 'push'
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: ${{ secrets.MAIL_SERVER }}
+          server_port: ${{ secrets.MAIL_PORT }}
+          username: ${{ secrets.MAIL_USERNAME }}
+          password: ${{ secrets.MAIL_PASSWORD }}
+          subject: Diagrams Repository - Changelog Update
+          body: |
+            Hello Team,
+            
+            Changes have been made to diagrams in the repository.
+            Please find attached the latest changelog.
+            
+            Regards,
+            GitHub Actions
+          to: ${{ secrets.MAIL_RECIPIENTS }}
+          from: GitHub Actions <${{ secrets.MAIL_USERNAME }}>
+          attachments: ./svg_files/CHANGELOG.csv
