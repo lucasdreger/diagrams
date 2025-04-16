@@ -37,25 +37,25 @@ jobs:
 
             # Create an HTML wrapper file
             cat <<EOF > "html_files/${base}.html"
-   <!DOCTYPE html>
-   <html lang="en">
-   <head>
-     <meta charset="UTF-8">
-     <title>${base}</title>
-     <style>
-       body { margin: 0; padding: 0; }
-       svg { max-width: 100%; height: auto; display: block; }
-     </style>
-   </head>
-   <body>
-   EOF
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>${base}</title>
+  <style>
+    body { margin: 0; padding: 0; }
+    svg { max-width: 100%; height: auto; display: block; }
+  </style>
+</head>
+<body>
+EOF
 
             cat "svg_files/${base}.svg" >> "html_files/${base}.html"
 
             cat <<EOF >> "html_files/${base}.html"
-   </body>
-   </html>
-   EOF
+</body>
+</html>
+EOF
 
             echo "$(date) - Converted ${base}.drawio to SVG" >> svg_files/CHANGELOG.txt
             echo "$(date) - Wrapped ${base}.svg to HTML" >> html_files/CHANGELOG.txt
