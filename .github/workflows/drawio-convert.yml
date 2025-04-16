@@ -5,6 +5,10 @@ on:
     paths:
       - '**/*.drawio'
 
+# Add permissions needed for the workflow
+permissions:
+  contents: write
+
 jobs:
   convert:
     runs-on: ubuntu-latest
