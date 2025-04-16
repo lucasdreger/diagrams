@@ -60,18 +60,25 @@ jobs:
           EOL
           chmod +x /tmp/convert-drawio.sh
 
-          # Get the list of changed .drawio files in this commit
-          CHANGED_FILES=$(git diff --name-only HEAD^ HEAD | grep "\.drawio$" || echo "")
+          # Set debug output to help troubleshoot
+          echo "Current directory: $(pwd)"
+          echo "Listing drawio_files directory:"
+          ls -la drawio_files || echo "drawio_files directory not found"
+          
+          # Get the list of changed .drawio files in this commit - more robust pattern matching
+          CHANGED_FILES=$(git diff --name-only HEAD^ HEAD | grep -E '.*\.drawio$' || echo "")
           echo "Changed files in this commit: $CHANGED_FILES"
           
-          # Find all .drawio files and process them
+          # Find all .drawio files and process them - search in current dir AND drawio_files dir if it exists
           find . -type f -name "*.drawio" -print0 | while IFS= read -r -d $'\0' file; do
             # Get the base filename without extension, preserving spaces
             base=$(basename "$file" .drawio)
+            rel_path=$(echo "$file" | sed 's|^\./||')
+            echo "Full file path: $file, Relative path: $rel_path"
             
-            # Check if this file was changed in the current commit
-            if echo "$CHANGED_FILES" | grep -q "$file"; then
-              echo "Processing changed file: $file"
+            # More robust change detection that handles paths better
+            if echo "$CHANGED_FILES" | grep -q "$rel_path"; then
+              echo "Processing changed file: $file (matched $rel_path in changed files)"
               FILE_CHANGED=true
             else
               echo "Processing file (no changes): $file"
@@ -117,14 +124,26 @@ jobs:
               FORMATTED_DATE=$(date +"%d.%m.%Y")
               FORMATTED_TIME=$(date +"%H:%M:%S")
               
-              # Check if SVG already exists BEFORE we converted it to determine if this is a new diagram
-              # We need to check git history to properly determine if the file is new or modified
-              if git ls-files --error-unmatch "svg_files/${base}.svg" &>/dev/null; then
+              # Check if this is a new diagram or a modification
+              # First try with git history, fallback to file existence check
+              if git ls-files --error-unmatch "svg_files/${base}.svg" &>/dev/null 2>/dev/null; then
                 CHANGE_TYPE="Modified"
               else
-                CHANGE_TYPE="New"
+                # Fallback to direct file check before our current conversion
+                if [ -f "svg_files/${base}.svg.old" ]; then
+                  CHANGE_TYPE="Modified"
+                else
+                  CHANGE_TYPE="New"
+                fi
               fi
               
+              # Make sure changelog directory exists
+              mkdir -p svg_files html_files
+              
+              # Make debug output to understand what's happening
+              echo "Creating changelog entries for: $base (${CHANGE_TYPE})"
+              
+              # Write to changelogs
               echo "$FORMATTED_DATE,$FORMATTED_TIME,\"$AUTHOR\",Converted,\"${base}.drawio\",\"$CHANGE_TYPE\"" >> svg_files/CHANGELOG.csv
               echo "$FORMATTED_DATE,$FORMATTED_TIME,\"$AUTHOR\",Wrapped to HTML,\"${base}.svg\",\"$CHANGE_TYPE\"" >> html_files/CHANGELOG.csv
               echo "Added entries to changelog for $file ($CHANGE_TYPE)"
