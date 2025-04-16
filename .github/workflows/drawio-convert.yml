@@ -46,14 +46,16 @@ jobs:
           EOL
           chmod +x /tmp/convert-drawio.sh
 
-          for file in $(find . -type f -name "*.drawio"); do
+          # Find files and handle them properly with spaces in filenames
+          find . -type f -name "*.drawio" -print0 | while IFS= read -r -d $'\0' file; do
+            # Get the base filename without extension, preserving spaces
             base=$(basename "$file" .drawio)
-            echo "Processing $base.drawio..."
+            echo "Processing: $file"
 
             mkdir -p "svg_files"
             output_path="svg_files/${base}.svg"
             
-            # Run the conversion with xvfb-run
+            # Run the conversion with xvfb-run - quote variables to handle spaces properly
             xvfb-run -a /tmp/convert-drawio.sh "$file" "$output_path"
             
             # Check if conversion succeeded
