@@ -18,7 +18,8 @@ jobs:
       - name: Install Draw.io and dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y wget unzip xvfb libasound2 libgbm1 libnspr4 libnss3 libxss1
+          # Use libasound2t64 instead of libasound2 for Ubuntu Noble (24.04)
+          sudo apt-get install -y wget unzip xvfb libasound2t64 libgbm1 libnspr4 libnss3 libxss1
           wget https://github.com/jgraph/drawio-desktop/releases/download/v26.2.2/drawio-amd64-26.2.2.deb
           sudo apt-get -f install -y
           sudo dpkg -i drawio-amd64-26.2.2.deb || sudo apt-get -f install -y
@@ -34,13 +35,23 @@ jobs:
           # Set up virtual display for headless operation
           Xvfb :99 -screen 0 1024x768x16 &
           export DISPLAY=:99
+          sleep 1 # Give Xvfb time to start
 
           for file in $(find . -type f -name "*.drawio"); do
             base=$(basename "$file" .drawio)
             echo "Processing $base.drawio..."
 
             # Export to SVG using proper drawio command format
-            xvfb-run --auto-servernum drawio --no-sandbox --export --format svg --output "svg_files/${base}.svg" "$file"
+            # Try different possible paths for the drawio executable
+            if [ -f "/usr/bin/drawio" ]; then
+              xvfb-run -a /usr/bin/drawio --no-sandbox --export --format svg --output "svg_files/${base}.svg" "$file"
+            elif [ -f "/opt/drawio/drawio" ]; then
+              xvfb-run -a /opt/drawio/drawio --no-sandbox --export --format svg --output "svg_files/${base}.svg" "$file"
+            else
+              # Find drawio executable in PATH
+              DRAWIO_PATH=$(which drawio)
+              xvfb-run -a $DRAWIO_PATH --no-sandbox --export --format svg --output "svg_files/${base}.svg" "$file"
+            fi
 
             # Create an HTML wrapper
             echo '<!DOCTYPE html>' > "html_files/${base}.html"
@@ -71,5 +82,11 @@ jobs:
           git config --local user.name "github-actions[bot]"
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git add svg_files html_files
-          git diff-index --quiet HEAD || git commit -m "Auto-converted draw.io files"
-          git push
+          # Only commit if there are changes
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "Auto-converted draw.io files"
+            # Use GitHub token for authentication
+            git push "https://${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" HEAD:${GITHUB_REF#refs/heads/}
+          fi
