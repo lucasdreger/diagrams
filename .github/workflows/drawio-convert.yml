@@ -58,11 +58,25 @@ jobs:
           EOL
           chmod +x /tmp/convert-drawio.sh
 
-          # Find files and handle them properly with spaces in filenames
-          find . -type f -name "*.drawio" -print0 | while IFS= read -r -d $'\0' file; do
+          # Get only the .drawio files changed in the last commit
+          CHANGED_FILES=$(git diff --name-only HEAD^ HEAD | grep "\.drawio$" || echo "")
+          
+          if [ -z "$CHANGED_FILES" ]; then
+            echo "No .drawio files changed in this commit."
+            exit 0
+          fi
+          
+          # Process only the modified .drawio files
+          echo "$CHANGED_FILES" | while read -r file; do
+            # Skip if file doesn't exist (e.g. it was deleted)
+            if [ ! -f "$file" ]; then
+              echo "File $file no longer exists, skipping."
+              continue
+            fi
+            
             # Get the base filename without extension, preserving spaces
             base=$(basename "$file" .drawio)
-            echo "Processing: $file"
+            echo "Processing changed file: $file"
 
             mkdir -p "svg_files"
             output_path="svg_files/${base}.svg"
