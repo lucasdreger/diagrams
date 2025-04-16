@@ -38,26 +38,22 @@ jobs:
             draw.io --export --format svg --output "svg_files/${base}.svg" "$file"
 
             # Create an HTML wrapper
-            cat <<EOF > "html_files/${base}.html"
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>${base}</title>
-  <style>
-    body { margin: 0; padding: 0; }
-    svg { max-width: 100%; height: auto; display: block; }
-  </style>
-</head>
-<body>
-EOF
+            echo '<!DOCTYPE html>' > "html_files/${base}.html"
+            echo '<html lang="en">' >> "html_files/${base}.html"
+            echo '<head>' >> "html_files/${base}.html"
+            echo '  <meta charset="UTF-8">' >> "html_files/${base}.html"
+            echo "  <title>${base}</title>" >> "html_files/${base}.html"
+            echo '  <style>' >> "html_files/${base}.html"
+            echo '    body { margin: 0; padding: 0; }' >> "html_files/${base}.html"
+            echo '    svg { max-width: 100%; height: auto; display: block; }' >> "html_files/${base}.html"
+            echo '  </style>' >> "html_files/${base}.html"
+            echo '</head>' >> "html_files/${base}.html"
+            echo '<body>' >> "html_files/${base}.html"
 
             cat "svg_files/${base}.svg" >> "html_files/${base}.html"
 
-            cat <<EOF >> "html_files/${base}.html"
-</body>
-</html>
-EOF
+            echo '</body>' >> "html_files/${base}.html"
+            echo '</html>' >> "html_files/${base}.html"
 
             # Log the changes
             echo "$(date) - Converted ${base}.drawio to SVG" >> svg_files/CHANGELOG.txt
