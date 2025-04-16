@@ -128,25 +128,3 @@ jobs:
             git push "https://${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" HEAD:${GITHUB_REF#refs/heads/}
             echo "changes_made=true" >> $GITHUB_OUTPUT
           fi
-      
-      # Step 6: Send an email with the changelog (if changes were made)
-      - name: Send changelog email
-        if: success() && github.event_name == 'push'
-        uses: dawidd6/action-send-mail@v3
-        with:
-          server_address: ${{ secrets.MAIL_SERVER }}
-          server_port: ${{ secrets.MAIL_PORT }}
-          username: ${{ secrets.MAIL_USERNAME }}
-          password: ${{ secrets.MAIL_PASSWORD }}
-          subject: Diagrams Repository - Changelog Update
-          body: |
-            Hello Team,
-            
-            Changes have been made to diagrams in the repository.
-            Please find attached the latest changelog.
-            
-            Regards,
-            GitHub Actions
-          to: ${{ secrets.MAIL_RECIPIENTS }}
-          from: GitHub Actions <${{ secrets.MAIL_USERNAME }}>
-          attachments: ./svg_files/CHANGELOG.csv
