@@ -14,9 +14,11 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # Step 1: Check out the repository
+      # Step 1: Check out the repository with history to detect changes
       - name: Check out the repository
         uses: actions/checkout@v3
+        with:
+          fetch-depth: 0 # Fetch all history to properly identify changed files
 
       # Step 2: Install dependencies
       - name: Install Draw.io and dependencies
@@ -58,25 +60,23 @@ jobs:
           EOL
           chmod +x /tmp/convert-drawio.sh
 
-          # Get only the .drawio files changed in the last commit
+          # Get the list of changed .drawio files in this commit
           CHANGED_FILES=$(git diff --name-only HEAD^ HEAD | grep "\.drawio$" || echo "")
+          echo "Changed files in this commit: $CHANGED_FILES"
           
-          if [ -z "$CHANGED_FILES" ]; then
-            echo "No .drawio files changed in this commit."
-            exit 0
-          fi
-          
-          # Process only the modified .drawio files
-          echo "$CHANGED_FILES" | while read -r file; do
-            # Skip if file doesn't exist (e.g. it was deleted)
-            if [ ! -f "$file" ]; then
-              echo "File $file no longer exists, skipping."
-              continue
-            fi
-            
+          # Find all .drawio files and process them
+          find . -type f -name "*.drawio" -print0 | while IFS= read -r -d $'\0' file; do
             # Get the base filename without extension, preserving spaces
             base=$(basename "$file" .drawio)
-            echo "Processing changed file: $file"
+            
+            # Check if this file was changed in the current commit
+            if echo "$CHANGED_FILES" | grep -q "$file"; then
+              echo "Processing changed file: $file"
+              FILE_CHANGED=true
+            else
+              echo "Processing file (no changes): $file"
+              FILE_CHANGED=false
+            fi
 
             mkdir -p "svg_files"
             output_path="svg_files/${base}.svg"
@@ -109,22 +109,26 @@ jobs:
             echo '</body>' >> "html_files/${base}.html"
             echo '</html>' >> "html_files/${base}.html"
 
-            # Log the changes in CSV format with date as dd.mm.yyyy and full name
-            # Get the full name of the author (or committer) of the latest commit that modified this file
-            AUTHOR=$(git log -1 --format="%aN" -- "$file" || echo "${{ github.actor }}")
-            FORMATTED_DATE=$(date +"%d.%m.%Y")
-            FORMATTED_TIME=$(date +"%H:%M:%S")
-            
-            # Check if SVG already exists BEFORE we converted it to determine if this is a new diagram
-            # We need to check git history to properly determine if the file is new or modified
-            if git ls-files --error-unmatch "svg_files/${base}.svg" &>/dev/null; then
-              CHANGE_TYPE="Modified"
-            else
-              CHANGE_TYPE="New"
+            # Only log the changes if this file was modified in this commit
+            if [ "$FILE_CHANGED" = true ]; then
+              # Log the changes in CSV format with date as dd.mm.yyyy and full name
+              # Get the full name of the author (or committer) of the latest commit that modified this file
+              AUTHOR=$(git log -1 --format="%aN" -- "$file" || echo "${{ github.actor }}")
+              FORMATTED_DATE=$(date +"%d.%m.%Y")
+              FORMATTED_TIME=$(date +"%H:%M:%S")
+              
+              # Check if SVG already exists BEFORE we converted it to determine if this is a new diagram
+              # We need to check git history to properly determine if the file is new or modified
+              if git ls-files --error-unmatch "svg_files/${base}.svg" &>/dev/null; then
+                CHANGE_TYPE="Modified"
+              else
+                CHANGE_TYPE="New"
+              fi
+              
+              echo "$FORMATTED_DATE,$FORMATTED_TIME,\"$AUTHOR\",Converted,\"${base}.drawio\",\"$CHANGE_TYPE\"" >> svg_files/CHANGELOG.csv
+              echo "$FORMATTED_DATE,$FORMATTED_TIME,\"$AUTHOR\",Wrapped to HTML,\"${base}.svg\",\"$CHANGE_TYPE\"" >> html_files/CHANGELOG.csv
+              echo "Added entries to changelog for $file ($CHANGE_TYPE)"
             fi
-            
-            echo "$FORMATTED_DATE,$FORMATTED_TIME,\"$AUTHOR\",Converted,\"${base}.drawio\",\"$CHANGE_TYPE\"" >> svg_files/CHANGELOG.csv
-            echo "$FORMATTED_DATE,$FORMATTED_TIME,\"$AUTHOR\",Wrapped to HTML,\"${base}.svg\",\"$CHANGE_TYPE\"" >> html_files/CHANGELOG.csv
           done
 
       # Step 5: Commit and push changes
