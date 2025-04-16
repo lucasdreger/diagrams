@@ -32,7 +32,7 @@
           <mxGeometry x="593" y="490" width="34" height="55" as="geometry" />
         </mxCell>
         <mxCell id="70666756c84bb93c-12" value="3" style="shadow=0;dashed=0;html=1;strokeColor=none;fillColor=#ffffff;labelPosition=center;verticalLabelPosition=bottom;verticalAlign=top;shape=mxgraph.office.concepts.globe_internet;rounded=0;comic=0;fontFamily=Verdana;fontSize=14;fontColor=#FFFFFF;" parent="1" vertex="1">
-          <mxGeometry x="441" y="140" width="49" height="49" as="geometry" />
+          <mxGeometry x="430" y="90" width="49" height="49" as="geometry" />
         </mxCell>
         <mxCell id="SXYuldFzeb-XUlIl8b2w-1" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" edge="1" parent="1" source="70666756c84bb93c-13" target="70666756c84bb93c-1">
           <mxGeometry relative="1" as="geometry">
