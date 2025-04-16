@@ -1,4 +1,4 @@
-name: Export Drawio to HTML
+name: Convert Draw.io Files
 
 on:
   push:
@@ -6,91 +6,66 @@ on:
       - '**/*.drawio'
 
 jobs:
-  export-drawio:
+  convert:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
-        with:
-          fetch-depth: 0  # Fetch all history for changelog purposes
+      - uses: actions/checkout@v3
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v3
-        with:
-          node-version: '16'
-
-      - name: Install draw.io-export
-        run: npm install -g @drawio/export-cli
-
-      - name: Create html_files directory if it doesn't exist
-        run: mkdir -p html_files
-
-      - name: Get changed .drawio files
-        id: changed-files
+      # Install prerequisites (we need wget, unzip, and the draw.io binary)
+      - name: Install Dependencies
         run: |
-          echo "::set-output name=files::$(git diff --name-only ${{ github.event.before }} ${{ github.sha }} | grep '\.drawio$' | xargs)"
+          sudo apt-get update
+          sudo apt-get install -y wget unzip
+          # Download a Linux version of draw.io-desktop (adjust version as needed)
+          wget https://github.com/jgraph/drawio-desktop/releases/download/v20.8.0/draw.io-amd64-20.8.0.deb
+          sudo dpkg -i draw.io-amd64-20.8.0.deb
 
-      - name: Export .drawio files to HTML
+      - name: Create output folders
         run: |
-          # Initialize an array to store new files
-          new_files=()
-          
-          # Process each changed .drawio file
-          for file in ${{ steps.changed-files.outputs.files }}; do
-            echo "Processing $file"
-            filename=$(basename "$file" .drawio)
-            output_file="html_files/${filename}.html"
-            
-            # Check if this is a new file
-            if [ ! -f "$output_file" ]; then
-              new_files+=("$filename.html (new)")
-            else
-              new_files+=("$filename.html (updated)")
-            fi
-            
-            # Export the diagram to HTML
-            npx drawio-export --format html --output "$output_file" "$file"
-            echo "Exported $file to $output_file"
+          mkdir -p svg_files html_files
+
+      - name: Convert .drawio files to SVG and wrap to HTML
+        run: |
+          # Find all .drawio files in the repository.
+          for file in $(find . -type f -name "*.drawio"); do
+            # Get the base filename without extension and remove any leading "./"
+            base=$(basename "$file" .drawio)
+            echo "Processing $base.drawio..."
+
+            # Export to SVG (adjust the draw.io binary path if needed)
+            draw.io --export --format svg --output "svg_files/${base}.svg" "$file"
+
+            # Create an HTML wrapper file
+            cat <<EOF > "html_files/${base}.html"
+   <!DOCTYPE html>
+   <html lang="en">
+   <head>
+     <meta charset="UTF-8">
+     <title>${base}</title>
+     <style>
+       body { margin: 0; padding: 0; }
+       svg { max-width: 100%; height: auto; display: block; }
+     </style>
+   </head>
+   <body>
+   EOF
+
+            cat "svg_files/${base}.svg" >> "html_files/${base}.html"
+
+            cat <<EOF >> "html_files/${base}.html"
+   </body>
+   </html>
+   EOF
+
+            echo "$(date) - Converted ${base}.drawio to SVG" >> svg_files/CHANGELOG.txt
+            echo "$(date) - Wrapped ${base}.svg to HTML" >> html_files/CHANGELOG.txt
           done
-          
-          # Store new files list for changelog
-          echo "${new_files[@]}" > new_files_temp.txt
 
-      - name: Update Changelog
+      - name: Commit and push changes
         run: |
-          timestamp=$(date +"%Y-%m-%d %H:%M:%S")
-          commit_hash="${{ github.sha }}"
-          commit_msg=$(git log -1 --pretty=%B)
-          new_files=$(cat new_files_temp.txt)
-          
-          if [ ! -f changelog.md ]; then
-            echo "# Diagram Change Log" > changelog.md
-            echo "" >> changelog.md
-          fi
-          
-          {
-            echo "## $timestamp"
-            echo "- Commit: ${commit_hash}"
-            echo "- Message: ${commit_msg}"
-            echo "- Files:"
-            for file in ${{ steps.changed-files.outputs.files }}; do
-              echo "  - $file"
-            done
-            echo "- Exported HTML Files:"
-            for file in ${new_files}; do
-              echo "  - $file"
-            done
-            echo ""
-          } > temp_changelog.md
-          
-          cat temp_changelog.md changelog.md > new_changelog.md
-          mv new_changelog.md changelog.md
-          rm temp_changelog.md new_files_temp.txt
-          
-      - name: Commit changes
-        run: |
-          git config --global user.name 'GitHub Action'
-          git config --global user.email 'action@github.com'
-          git add html_files/ changelog.md
-          git commit -m "Auto-export .drawio files to HTML and update changelog" || echo "No changes to commit"
+          git config --local user.name "github-actions[bot]"
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git add svg_files html_files
+          # Only commit if there are changes.
+          git diff-index --quiet HEAD || git commit -m "Auto-converted draw.io files"
           git push
