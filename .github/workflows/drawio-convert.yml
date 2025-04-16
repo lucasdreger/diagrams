@@ -18,9 +18,10 @@ jobs:
       - name: Install Draw.io and dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y wget unzip
+          sudo apt-get install -y wget unzip xvfb libasound2 libgbm1 libnspr4 libnss3 libxss1
           wget https://github.com/jgraph/drawio-desktop/releases/download/v26.2.2/drawio-amd64-26.2.2.deb
-          sudo dpkg -i drawio-amd64-26.2.2.deb
+          sudo apt-get -f install -y
+          sudo dpkg -i drawio-amd64-26.2.2.deb || sudo apt-get -f install -y
 
       # Step 3: Create output directories
       - name: Create output folders
@@ -30,12 +31,16 @@ jobs:
       # Step 4: Convert .drawio files to SVG and wrap them in HTML
       - name: Convert Draw.io files
         run: |
+          # Set up virtual display for headless operation
+          Xvfb :99 -screen 0 1024x768x16 &
+          export DISPLAY=:99
+
           for file in $(find . -type f -name "*.drawio"); do
             base=$(basename "$file" .drawio)
             echo "Processing $base.drawio..."
 
-            # Export to SVG
-            draw.io --export --format svg --output "svg_files/${base}.svg" "$file"
+            # Export to SVG using proper drawio command format
+            xvfb-run --auto-servernum drawio --no-sandbox --export --format svg --output "svg_files/${base}.svg" "$file"
 
             # Create an HTML wrapper
             echo '<!DOCTYPE html>' > "html_files/${base}.html"
