@@ -35,10 +35,10 @@ jobs:
           
           # Initialize CSV changelogs with headers if they don't exist
           if [ ! -f "svg_files/CHANGELOG.csv" ]; then
-            echo "Date,User,Action,File,Type" > svg_files/CHANGELOG.csv
+            echo "Date,Time,User,Action,File,Type" > svg_files/CHANGELOG.csv
           fi
           if [ ! -f "html_files/CHANGELOG.csv" ]; then
-            echo "Date,User,Action,File,Type" > html_files/CHANGELOG.csv
+            echo "Date,Time,User,Action,File,Type" > html_files/CHANGELOG.csv
           fi
 
       # Step 4: Convert .drawio files to SVG and wrap them in HTML
@@ -99,16 +99,18 @@ jobs:
             # Get the full name of the author (or committer) of the latest commit that modified this file
             AUTHOR=$(git log -1 --format="%aN" -- "$file" || echo "${{ github.actor }}")
             FORMATTED_DATE=$(date +"%d.%m.%Y")
+            FORMATTED_TIME=$(date +"%H:%M:%S")
             
-            # Check if SVG already exists to determine if this is a new or modified diagram
-            if [ -f "svg_files/${base}.svg" ]; then
+            # Check if SVG already exists BEFORE we converted it to determine if this is a new diagram
+            # We need to check git history to properly determine if the file is new or modified
+            if git ls-files --error-unmatch "svg_files/${base}.svg" &>/dev/null; then
               CHANGE_TYPE="Modified"
             else
               CHANGE_TYPE="New"
             fi
             
-            echo "$FORMATTED_DATE,\"$AUTHOR\",Converted,\"${base}.drawio\",\"$CHANGE_TYPE\"" >> svg_files/CHANGELOG.csv
-            echo "$FORMATTED_DATE,\"$AUTHOR\",Wrapped to HTML,\"${base}.svg\",\"$CHANGE_TYPE\"" >> html_files/CHANGELOG.csv
+            echo "$FORMATTED_DATE,$FORMATTED_TIME,\"$AUTHOR\",Converted,\"${base}.drawio\",\"$CHANGE_TYPE\"" >> svg_files/CHANGELOG.csv
+            echo "$FORMATTED_DATE,$FORMATTED_TIME,\"$AUTHOR\",Wrapped to HTML,\"${base}.svg\",\"$CHANGE_TYPE\"" >> html_files/CHANGELOG.csv
           done
 
       # Step 5: Commit and push changes
