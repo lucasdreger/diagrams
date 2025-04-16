@@ -19,8 +19,8 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y wget unzip
-          wget https://github.com/jgraph/drawio-desktop/releases/download/v20.8.0/draw.io-amd64-20.8.0.deb
-          sudo dpkg -i draw.io-amd64-20.8.0.deb
+          wget https://github.com/jgraph/drawio-desktop/releases/download/v26.2.2/drawio-amd64-26.2.2.deb
+          sudo dpkg -i drawio-amd64-26.2.2.deb
 
       # Step 3: Create output directories
       - name: Create output folders
