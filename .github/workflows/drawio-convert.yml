@@ -37,20 +37,30 @@ jobs:
           export DISPLAY=:99
           sleep 1 # Give Xvfb time to start
 
+          # Use a different approach - temporary script
+          cat > /tmp/convert-drawio.sh << 'EOL'
+          #!/bin/bash
+          input_file=$1
+          output_file=$2
+          drawio -x -f svg -o "$output_file" "$input_file"
+          EOL
+          chmod +x /tmp/convert-drawio.sh
+
           for file in $(find . -type f -name "*.drawio"); do
             base=$(basename "$file" .drawio)
             echo "Processing $base.drawio..."
 
-            # Export to SVG using proper drawio command format
-            # Try different possible paths for the drawio executable
-            if [ -f "/usr/bin/drawio" ]; then
-              xvfb-run -a /usr/bin/drawio --no-sandbox --export --format svg --output "svg_files/${base}.svg" "$file"
-            elif [ -f "/opt/drawio/drawio" ]; then
-              xvfb-run -a /opt/drawio/drawio --no-sandbox --export --format svg --output "svg_files/${base}.svg" "$file"
-            else
-              # Find drawio executable in PATH
-              DRAWIO_PATH=$(which drawio)
-              xvfb-run -a $DRAWIO_PATH --no-sandbox --export --format svg --output "svg_files/${base}.svg" "$file"
+            mkdir -p "svg_files"
+            output_path="svg_files/${base}.svg"
+            
+            # Run the conversion with xvfb-run
+            xvfb-run -a /tmp/convert-drawio.sh "$file" "$output_path"
+            
+            # Check if conversion succeeded
+            if [ ! -f "$output_path" ]; then
+              echo "Failed to convert $file to SVG. Trying alternative method..."
+              # Alternative approach using node directly if installed with drawio
+              xvfb-run -a drawio -x -f svg -o "$output_path" "$file"
             fi
 
             # Create an HTML wrapper
