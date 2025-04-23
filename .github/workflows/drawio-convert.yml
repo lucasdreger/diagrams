@@ -167,3 +167,139 @@ jobs:
             git push "https://${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" HEAD:${GITHUB_REF#refs/heads/}
             echo "changes_made=true" >> $GITHUB_OUTPUT
           fi
+          
+      # Step 6: Upload changelog to SharePoint
+      - name: Upload changelog to SharePoint
+        if: steps.commit_changes.outputs.changes_made == 'true'
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+            
+            try {
+              const https = require('https');
+              console.log('Preparing to upload changelog to SharePoint...');
+              
+              // Read the changelog file
+              const changelogPath = path.join(process.env.GITHUB_WORKSPACE, 'html_files', 'CHANGELOG.csv');
+              console.log(`Reading changelog from: ${changelogPath}`);
+              const fileContent = fs.readFileSync(changelogPath, 'utf8');
+              
+              // Function to make HTTP requests with promises
+              const httpRequest = (options, postData) => {
+                return new Promise((resolve, reject) => {
+                  const req = https.request(options, (res) => {
+                    let data = '';
+                    res.on('data', (chunk) => { data += chunk; });
+                    res.on('end', () => {
+                      if (res.statusCode >= 200 && res.statusCode < 300) {
+                        try {
+                          resolve(data.length > 0 ? JSON.parse(data) : {});
+                        } catch (e) {
+                          resolve(data); // Not JSON, return as string
+                        }
+                      } else {
+                        reject(new Error(`HTTP Error: ${res.statusCode} ${data}`));
+                      }
+                    });
+                  });
+                  
+                  req.on('error', reject);
+                  
+                  if (postData) {
+                    req.write(postData);
+                  }
+                  req.end();
+                });
+              };
+              
+              // Step 1: Get access token
+              console.log('Getting access token...');
+              const tokenBody = new URLSearchParams({
+                client_id: process.env.CLIENT_ID,
+                scope: 'https://graph.microsoft.com/.default',
+                client_secret: process.env.CLIENT_SECRET,
+                grant_type: 'client_credentials'
+              }).toString();
+              
+              const tokenOptions = {
+                method: 'POST',
+                hostname: 'login.microsoftonline.com',
+                path: `/${process.env.TENANT_ID}/oauth2/v2.0/token`,
+                headers: {
+                  'Content-Type': 'application/x-www-form-urlencoded',
+                  'Content-Length': Buffer.byteLength(tokenBody)
+                }
+              };
+              
+              // Get token
+              const tokenData = await httpRequest(tokenOptions, tokenBody);
+              console.log('Access token obtained');
+              
+              // Step 2: Get drives if needed
+              // If your folder ID isn't working, we can try to get the drives list
+              let driveId = process.env.DRIVE_ID;
+              
+              if (!driveId || driveId === 'auto') {
+                console.log('Drive ID not provided or set to auto, attempting to find it...');
+                const drivesOptions = {
+                  method: 'GET',
+                  hostname: 'graph.microsoft.com',
+                  path: `/v1.0/sites/${process.env.SITE_ID}/drives`,
+                  headers: {
+                    'Authorization': `Bearer ${tokenData.access_token}`,
+                    'Accept': 'application/json'
+                  }
+                };
+                
+                const drivesData = await httpRequest(drivesOptions);
+                console.log('Found drives:', drivesData.value.map(d => `${d.name}: ${d.id}`).join(', '));
+                
+                // Try to find the Documents drive
+                const documentsDrive = drivesData.value.find(d => 
+                  d.name === 'Documents' || 
+                  d.name === 'Shared Documents' || 
+                  d.name.includes('Document')
+                );
+                
+                if (documentsDrive) {
+                  driveId = documentsDrive.id;
+                  console.log(`Using drive: ${documentsDrive.name} (${driveId})`);
+                } else if (drivesData.value.length > 0) {
+                  driveId = drivesData.value[0].id;
+                  console.log(`Using first available drive: ${drivesData.value[0].name} (${driveId})`);
+                } else {
+                  throw new Error('No drives found in the site');
+                }
+              }
+              
+              // Step 3: Upload the file
+              const fileName = `Diagrams_Changelog_${new Date().toISOString().split('T')[0]}.csv`;
+              console.log(`Uploading changelog as ${fileName} to drive ${driveId}...`);
+              
+              const uploadOptions = {
+                method: 'PUT',
+                hostname: 'graph.microsoft.com',
+                path: `/v1.0/sites/${process.env.SITE_ID}/drives/${driveId}/root:/${fileName}:/content`,
+                headers: {
+                  'Authorization': `Bearer ${tokenData.access_token}`,
+                  'Content-Type': 'text/csv',
+                  'Content-Length': Buffer.byteLength(fileContent)
+                }
+              };
+              
+              const uploadData = await httpRequest(uploadOptions, fileContent);
+              console.log('Successfully uploaded changelog to SharePoint');
+              console.log(`File URL: ${uploadData.webUrl}`);
+              
+            } catch (error) {
+              console.error('Error uploading to SharePoint:', error.message);
+              // Don't fail the workflow if SharePoint upload fails
+            }
+        env:
+          TENANT_ID: ${{ secrets.TENANT_ID }}
+          CLIENT_ID: ${{ secrets.CLIENT_ID }}
+          CLIENT_SECRET: ${{ secrets.CLIENT_SECRET }}
+          SITE_ID: ${{ secrets.SITE_ID }}
+          DRIVE_ID: ${{ secrets.DRIVE_ID || 'auto' }}
