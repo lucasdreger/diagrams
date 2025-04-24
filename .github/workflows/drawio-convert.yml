@@ -238,40 +238,68 @@ jobs:
               console.log('Access token obtained');
               
               // Step 2: Get drives if needed
-              // If your folder ID isn't working, we can try to get the drives list
-              let driveId = process.env.DRIVE_ID;
+              // Force drive ID detection regardless of configured value due to previous errors
+              console.log('Attempting to detect SharePoint drives automatically...');
               
-              if (!driveId || driveId === 'auto') {
-                console.log('Drive ID not provided or set to auto, attempting to find it...');
-                const drivesOptions = {
+              // First, verify that the site ID is correct
+              try {
+                console.log(`Verifying site ID: ${process.env.SITE_ID}`);
+                const siteOptions = {
                   method: 'GET',
                   hostname: 'graph.microsoft.com',
-                  path: `/v1.0/sites/${process.env.SITE_ID}/drives`,
+                  path: `/v1.0/sites/${process.env.SITE_ID}`,
                   headers: {
                     'Authorization': `Bearer ${tokenData.access_token}`,
                     'Accept': 'application/json'
                   }
                 };
                 
-                const drivesData = await httpRequest(drivesOptions);
-                console.log('Found drives:', drivesData.value.map(d => `${d.name}: ${d.id}`).join(', '));
-                
-                // Try to find the Documents drive
-                const documentsDrive = drivesData.value.find(d => 
-                  d.name === 'Documents' || 
-                  d.name === 'Shared Documents' || 
-                  d.name.includes('Document')
-                );
-                
-                if (documentsDrive) {
-                  driveId = documentsDrive.id;
-                  console.log(`Using drive: ${documentsDrive.name} (${driveId})`);
-                } else if (drivesData.value.length > 0) {
-                  driveId = drivesData.value[0].id;
-                  console.log(`Using first available drive: ${drivesData.value[0].name} (${driveId})`);
-                } else {
-                  throw new Error('No drives found in the site');
+                const siteData = await httpRequest(siteOptions);
+                console.log(`Site found: ${siteData.displayName || siteData.name}`);
+              } catch (siteError) {
+                console.error('Error verifying site:', siteError.message);
+                console.log('Trying alternative site path format...');
+                // If the site ID doesn't work, try a different format
+                process.env.SITE_ID = `sites/${process.env.SITE_ID.split('/').pop()}`;
+                console.log(`Using alternative site ID format: ${process.env.SITE_ID}`);
+              }
+              
+              // Now get the list of drives
+              const drivesOptions = {
+                method: 'GET',
+                hostname: 'graph.microsoft.com',
+                path: `/v1.0/sites/${process.env.SITE_ID}/drives`,
+                headers: {
+                  'Authorization': `Bearer ${tokenData.access_token}`,
+                  'Accept': 'application/json'
                 }
+              };
+              
+              console.log(`Requesting drives list from: ${drivesOptions.path}`);
+              const drivesData = await httpRequest(drivesOptions);
+              
+              if (!drivesData.value || drivesData.value.length === 0) {
+                throw new Error(`No drives found for site: ${process.env.SITE_ID}`);
+              }
+              
+              console.log('Available drives:');
+              drivesData.value.forEach(d => console.log(`- ${d.name}: ${d.id}`));
+              
+              // Try to find the Documents drive
+              const documentsDrive = drivesData.value.find(d => 
+                d.name === 'Documents' || 
+                d.name === 'Shared Documents' || 
+                d.name.includes('Document')
+              );
+              
+              let driveId;
+              if (documentsDrive) {
+                driveId = documentsDrive.id;
+                console.log(`Selected document library: ${documentsDrive.name} (${driveId})`);
+              } else {
+                // Fall back to first drive
+                driveId = drivesData.value[0].id;
+                console.log(`No document library found, using first available drive: ${drivesData.value[0].name} (${driveId})`);
               }
               
               // Step 3: Upload the file
