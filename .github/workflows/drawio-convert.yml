@@ -214,11 +214,11 @@ jobs:
                 });
               };
               
-              // Step 1: Get access token
+              // Step 1: Get access token with proper SharePoint permissions
               console.log('Getting access token...');
               const tokenBody = new URLSearchParams({
                 client_id: process.env.CLIENT_ID,
-                scope: 'https://graph.microsoft.com/.default',
+                scope: 'https://graph.microsoft.com/.default Sites.ReadWrite.All Files.ReadWrite.All',
                 client_secret: process.env.CLIENT_SECRET,
                 grant_type: 'client_credentials'
               }).toString();
