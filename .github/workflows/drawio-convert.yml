@@ -304,12 +304,60 @@ jobs:
               
               // Step 3: Upload the file
               const fileName = `Diagrams_Changelog_${new Date().toISOString().split('T')[0]}.csv`;
-              console.log(`Uploading changelog as ${fileName} to drive ${driveId}...`);
+              const folderPath = 'Test';  // Target folder in SharePoint
+              console.log(`Uploading changelog as ${fileName} to folder "${folderPath}" in drive ${driveId}...`);
               
+              // Create the folder if it doesn't exist
+              try {
+                const folderCheckOptions = {
+                  method: 'GET',
+                  hostname: 'graph.microsoft.com',
+                  path: `/v1.0/sites/${process.env.SITE_ID}/drives/${driveId}/root:/${folderPath}`,
+                  headers: {
+                    'Authorization': `Bearer ${tokenData.access_token}`,
+                    'Accept': 'application/json'
+                  }
+                };
+                
+                // Check if folder exists
+                try {
+                  await httpRequest(folderCheckOptions);
+                  console.log(`Folder "${folderPath}" already exists`);
+                } catch (folderError) {
+                  if (folderError.message.includes('404')) {
+                    // Folder doesn't exist, create it
+                    console.log(`Creating folder "${folderPath}"...`);
+                    const createFolderOptions = {
+                      method: 'PATCH',
+                      hostname: 'graph.microsoft.com',
+                      path: `/v1.0/sites/${process.env.SITE_ID}/drives/${driveId}/root/children`,
+                      headers: {
+                        'Authorization': `Bearer ${tokenData.access_token}`,
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                      }
+                    };
+                    
+                    await httpRequest(createFolderOptions, JSON.stringify({
+                      name: folderPath,
+                      folder: {},
+                      '@microsoft.graph.conflictBehavior': 'rename'
+                    }));
+                    console.log(`Folder "${folderPath}" created successfully`);
+                  } else {
+                    throw folderError;
+                  }
+                }
+              } catch (folderCreateError) {
+                console.error(`Error managing folder "${folderPath}":`, folderCreateError.message);
+                console.log('Will attempt to upload to the folder anyway...');
+              }
+              
+              // Upload file to the specified folder
               const uploadOptions = {
                 method: 'PUT',
                 hostname: 'graph.microsoft.com',
-                path: `/v1.0/sites/${process.env.SITE_ID}/drives/${driveId}/root:/${fileName}:/content`,
+                path: `/v1.0/sites/${process.env.SITE_ID}/drives/${driveId}/root:/${folderPath}/${fileName}:/content`,
                 headers: {
                   'Authorization': `Bearer ${tokenData.access_token}`,
                   'Content-Type': 'text/csv',
