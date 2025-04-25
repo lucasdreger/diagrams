@@ -274,14 +274,27 @@ jobs:
         run: |
           git config --local user.name "github-actions[bot]"
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # Fetch latest changes before adding our changes
+          echo "Fetching latest changes from remote repository..."
+          git fetch origin
+          
+          # Add our changes
           git add svg_files html_files
+          
           # Only commit if there are changes
           if git diff --staged --quiet; then
             echo "No changes to commit"
             echo "changes_made=false" >> $GITHUB_OUTPUT
           else
             git commit -m "Auto-converted draw.io files"
-            # Use GitHub token for authentication
+            
+            # Pull the latest changes before pushing
+            echo "Pulling latest changes from remote repository..."
+            git pull --rebase origin ${GITHUB_REF#refs/heads/}
+            
+            # Use GitHub token for authentication and push
+            echo "Pushing changes to remote repository..."
             git push "https://${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" HEAD:${GITHUB_REF#refs/heads/}
             echo "changes_made=true" >> $GITHUB_OUTPUT
           fi
