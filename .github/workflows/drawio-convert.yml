@@ -148,13 +148,13 @@ jobs:
             output_path="svg_files/${base}.svg"
             
             # Run the conversion with xvfb-run - quote variables to handle spaces properly
-            xvfb-run -a /tmp/convert-drawio.sh "$file" "$output_path"
+            xvfb-run -a /tmp/convert-drawio.sh "$changed_file" "$output_path"
             
             # Check if conversion succeeded
             if [ ! -f "$output_path" ]; then
-              echo "Failed to convert $file to SVG. Trying alternative method..."
+              echo "Failed to convert $changed_file to SVG. Trying alternative method..."
               # Alternative approach using node directly if installed with drawio
-              xvfb-run -a drawio -x -f svg -o "$output_path" "$file"
+              xvfb-run -a drawio -x -f svg -o "$output_path" "$changed_file"
             fi
 
             # Create an HTML wrapper
@@ -177,9 +177,9 @@ jobs:
             if [ "$FILE_CHANGED" = true ]; then
               # Log the changes in CSV format with date as dd.mm.yyyy and full name
               # Get the full name of the author (or committer) of the latest commit that modified this file
-              AUTHOR=$(git log -1 --format="%aN" -- "$file" || echo "${{ github.actor }}")
+              AUTHOR=$(git log -1 --format="%aN" -- "$changed_file" || echo "${{ github.actor }}")
               # Get the commit message for this file's change
-              COMMIT_MSG=$(git log -1 --format="%s" -- "$file" || echo "No commit message")
+              COMMIT_MSG=$(git log -1 --format="%s" -- "$changed_file" || echo "No commit message")
               # Escape any quotes in the commit message for CSV format
               COMMIT_MSG=$(echo "$COMMIT_MSG" | sed 's/"/""/g')
               FORMATTED_DATE=$(date +"%d.%m.%Y")
@@ -230,10 +230,10 @@ jobs:
               MAJOR_VERSION=1
               
               # Check if file exists in previous commits to determine major version
-              PREV_VERSIONS=$(git log --follow --pretty=format:"%H" -- "$file")
+              PREV_VERSIONS=$(git log --follow --pretty=format:"%H" -- "$changed_file")
               if [ -n "$PREV_VERSIONS" ]; then
                 # Count the number of commits containing major change keywords
-                MAJOR_VERSION=$(git log --follow --pretty=format:"%s" -- "$file" | grep -iE "$MAJOR_KEYWORDS" | wc -l | tr -d ' ')
+                MAJOR_VERSION=$(git log --follow --pretty=format:"%s" -- "$changed_file" | grep -iE "$MAJOR_KEYWORDS" | wc -l | tr -d ' ')
                 # Add 1 because we start at version 1.0
                 MAJOR_VERSION=$((MAJOR_VERSION + 1))
               fi
@@ -264,7 +264,7 @@ jobs:
               # Properly escape all fields to ensure CSV format integrity
               echo "$FORMATTED_DATE,$FORMATTED_TIME,\"$AUTHOR\",\"${base}\",\"$ACTION_DESC\",\"${base}.drawio to ${base}.svg\",\"$COMMIT_MSG\",\"$VERSION\"" >> svg_files/CHANGELOG.csv
               echo "$FORMATTED_DATE,$FORMATTED_TIME,\"$AUTHOR\",\"${base}\",\"$ACTION_DESC\",\"${base}.drawio to ${base}.html\",\"$COMMIT_MSG\",\"$VERSION\"" >> html_files/CHANGELOG.csv
-              echo "Added entries to changelog for $file ($ACTION_DESC)"
+              echo "Added entries to changelog for $changed_file ($ACTION_DESC)"
             fi
           done
 
