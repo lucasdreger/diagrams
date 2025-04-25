@@ -194,7 +194,7 @@ jobs:
               # Get enhanced version information using semantic versioning light (MAJOR.MINOR)
               # Use git history to determine if this is a major or minor change
               # Start with the commit message - if it contains keywords, categorize the change
-              MAJOR_KEYWORDS="redesign|new version|complete|refactor|overhaul|major"
+              MAJOR_KEYWORDS="redesign|new version|complete|refactor|overhaul|major|added"
               MINOR_UPDATE_KEYWORDS="update|fix|adjust|tweak|enhance|improve|minor"
               
               # Default to standard minor change (increment minor version)
