@@ -117,9 +117,8 @@ jobs:
           echo "Listing drawio_files directory:"
           ls -la drawio_files || echo "drawio_files directory not found"
           
-          # Get the list of changed .drawio files in this commit - more robust pattern matching
-          CHANGED_FILES=$(git diff --name-only HEAD^ HEAD | grep -E '.*\.drawio$' || echo "")
-          echo "Changed files in this commit: $CHANGED_FILES"
+          # For first run or debugging, process all files regardless of changes
+          echo "Processing all .drawio files to generate complete changelog..."
           
           # Find all .drawio files and process them - search in current dir AND drawio_files dir if it exists
           find . -type f -name "*.drawio" -print0 | while IFS= read -r -d $'\0' file; do
@@ -128,14 +127,9 @@ jobs:
             rel_path=$(echo "$file" | sed 's|^\./||')
             echo "Full file path: $file, Relative path: $rel_path"
             
-            # More robust change detection that handles paths better
-            if echo "$CHANGED_FILES" | grep -q "$rel_path"; then
-              echo "Processing changed file: $file (matched $rel_path in changed files)"
-              FILE_CHANGED=true
-            else
-              echo "Processing file (no changes): $file"
-              FILE_CHANGED=false
-            fi
+            # Always process all files to ensure complete changelog
+            FILE_CHANGED=true
+            echo "Processing file: $file"
 
             mkdir -p "svg_files"
             output_path="svg_files/${base}.svg"
