@@ -114,13 +114,15 @@ jobs:
             cat "svg_files/${base}.svg" >> "html_files/${base}.html"
 
             echo '</body>' >> "html_files/${base}.html"
-            echo '</html>' >> "html_files/${base}.html"
-
-            # Only log the changes if this file was modified in this commit
+            echo '</html>' >> "html_files/${base}.html"              # Only log the changes if this file was modified in this commit
             if [ "$FILE_CHANGED" = true ]; then
               # Log the changes in CSV format with date as dd.mm.yyyy and full name
               # Get the full name of the author (or committer) of the latest commit that modified this file
               AUTHOR=$(git log -1 --format="%aN" -- "$file" || echo "${{ github.actor }}")
+              # Get the commit message for this file's change
+              COMMIT_MSG=$(git log -1 --format="%s" -- "$file" || echo "No commit message")
+              # Escape any quotes in the commit message for CSV format
+              COMMIT_MSG=$(echo "$COMMIT_MSG" | sed 's/"/""/g')
               FORMATTED_DATE=$(date +"%d.%m.%Y")
               FORMATTED_TIME=$(date +"%H:%M:%S")
               
@@ -143,9 +145,9 @@ jobs:
               # Make debug output to understand what's happening
               echo "Creating changelog entries for: $base (${CHANGE_TYPE})"
               
-              # Write to changelogs
-              echo "$FORMATTED_DATE,$FORMATTED_TIME,\"$AUTHOR\",Converted,\"${base}.drawio\",\"$CHANGE_TYPE\"" >> svg_files/CHANGELOG.csv
-              echo "$FORMATTED_DATE,$FORMATTED_TIME,\"$AUTHOR\",Wrapped to HTML,\"${base}.svg\",\"$CHANGE_TYPE\"" >> html_files/CHANGELOG.csv
+              # Write to changelogs with commit message
+              echo "$FORMATTED_DATE,$FORMATTED_TIME,\"$AUTHOR\",Converted,\"${base}.drawio\",\"$CHANGE_TYPE\",\"$COMMIT_MSG\"" >> svg_files/CHANGELOG.csv
+              echo "$FORMATTED_DATE,$FORMATTED_TIME,\"$AUTHOR\",Wrapped to HTML,\"${base}.svg\",\"$CHANGE_TYPE\",\"$COMMIT_MSG\"" >> html_files/CHANGELOG.csv
               echo "Added entries to changelog for $file ($CHANGE_TYPE)"
             fi
           done
@@ -192,8 +194,8 @@ jobs:
               const header = lines[0]; // Get header row
               const dataRows = lines.slice(1); // Get data rows
               
-              // Create a properly formatted CSV with all the needed columns
-              let fileContent = 'Date,Time,User,Action,File,Type,SharePoint Upload Date\n';
+              // Create a properly formatted CSV with all the needed columns including commit message
+              let fileContent = 'Date,Time,User,Action,File,Type,Commit Message,SharePoint Upload Date\n';
               
               // Add the data rows with today's upload date
               const today = new Date().toLocaleDateString('en-GB', {
@@ -322,13 +324,12 @@ jobs:
               console.log('Available drives:');
               drivesData.value.forEach(d => console.log(`- ${d.name}: ${d.id}`));
               
-              // Try to find the Documents drive - include German "Freigegebene Dokumente"
+              // Try to find the Documents drive - prioritize "Shared Documents" 
+              console.log('Looking for document library named "Shared Documents"');
               const documentsDrive = drivesData.value.find(d => 
-                d.name === 'Documents' || 
                 d.name === 'Shared Documents' || 
-                d.name === 'Freigegebene Dokumente' ||
-                d.name.includes('Document') ||
-                d.name.includes('Dokumente')
+                d.name === 'Documents' || 
+                d.name.includes('Document')
               );
               
               let driveId;
