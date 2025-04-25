@@ -37,10 +37,10 @@ jobs:
           
           # Initialize CSV changelogs with headers if they don't exist
           if [ ! -f "svg_files/CHANGELOG.csv" ]; then
-            echo "Date,Time,User,Action,File,Type" > svg_files/CHANGELOG.csv
+            echo "Date,Time,User,Diagram,Action,File,Commit Message,Version" > svg_files/CHANGELOG.csv
           fi
           if [ ! -f "html_files/CHANGELOG.csv" ]; then
-            echo "Date,Time,User,Action,File,Type" > html_files/CHANGELOG.csv
+            echo "Date,Time,User,Diagram,Action,File,Commit Message,Version" > html_files/CHANGELOG.csv
           fi
 
       # Step 4: Convert .drawio files to SVG and wrap them in HTML
@@ -193,10 +193,18 @@ jobs:
                 fi
               fi
               
-              # Write to changelogs with commit message, improved descriptive actions, and change description
-              echo "$FORMATTED_DATE,$FORMATTED_TIME,\"$AUTHOR\",\"Converted .drawio to SVG\",\"${base}.drawio → ${base}.svg\",\"$CHANGE_TYPE ($CHANGE_DESCRIPTION)\",\"$COMMIT_MSG\",\"${VERSION}\"" >> svg_files/CHANGELOG.csv
-              echo "$FORMATTED_DATE,$FORMATTED_TIME,\"$AUTHOR\",\"Generated HTML from SVG\",\"${base}.drawio → ${base}.html\",\"$CHANGE_TYPE ($CHANGE_DESCRIPTION)\",\"$COMMIT_MSG\",\"${VERSION}\"" >> html_files/CHANGELOG.csv
-              echo "Added entries to changelog for $file ($CHANGE_TYPE)"
+              # Simplified action description: New for new files, Update for modifications
+              if [ "$CHANGE_TYPE" = "New" ]; then
+                ACTION_DESC="New"
+              else
+                ACTION_DESC="Modified (Update)"
+              fi
+              
+              # Write to changelogs with the new column order and diagram name
+              # Date, Time, User, Diagram, Action, File, Commit Message, Version
+              echo "$FORMATTED_DATE,$FORMATTED_TIME,\"$AUTHOR\",\"${base}\",\"$ACTION_DESC\",\"${base}.drawio to ${base}.svg\",\"$COMMIT_MSG\",\"${VERSION}\"" >> svg_files/CHANGELOG.csv
+              echo "$FORMATTED_DATE,$FORMATTED_TIME,\"$AUTHOR\",\"${base}\",\"$ACTION_DESC\",\"${base}.drawio to ${base}.html\",\"$COMMIT_MSG\",\"${VERSION}\"" >> html_files/CHANGELOG.csv
+              echo "Added entries to changelog for $file ($ACTION_DESC)"
             fi
           done
 
@@ -242,8 +250,9 @@ jobs:
               const header = lines[0]; // Get header row
               const dataRows = lines.slice(1); // Get data rows
               
-              // Create a properly formatted CSV with all the needed columns including commit message and version
-              let fileContent = 'Date,Time,User,Action,File,Type,Commit Message,Version,SharePoint Upload Date\n';
+              // Create a properly formatted CSV with all the needed columns in the requested order
+              // Date, Time, Diagram, Action, File, Commit Message, Version, SharePoint Upload Date
+              let fileContent = 'Date,Time,Diagram,Action,File,Commit Message,Version,SharePoint Upload Date\n';
               
               // Add the data rows with today's upload date
               const today = new Date().toLocaleDateString('en-GB', {
@@ -252,9 +261,40 @@ jobs:
                 year: 'numeric'
               }); // Format as DD.MM.YYYY
               
+              // Process each row to handle the changed column ordering
               dataRows.forEach(row => {
                 if (row.trim()) {
-                  fileContent += `${row},${today}\n`;
+                  const columns = row.split(',');
+                  
+                  // Extract columns while preserving quoted values
+                  let extractedCols = [];
+                  let currentCol = '';
+                  let insideQuotes = false;
+                  
+                  for (let i = 0; i < columns.length; i++) {
+                    let col = columns[i];
+                    
+                    if (col.startsWith('"') && !insideQuotes) {
+                      insideQuotes = true;
+                      currentCol = col.substring(1);
+                    } else if (col.endsWith('"') && insideQuotes) {
+                      insideQuotes = false;
+                      currentCol += ',' + col.substring(0, col.length - 1);
+                      extractedCols.push(currentCol);
+                      currentCol = '';
+                    } else if (insideQuotes) {
+                      currentCol += ',' + col;
+                    } else {
+                      extractedCols.push(col);
+                    }
+                  }
+                  
+                  // Reorder columns to match the new format:
+                  // [0]Date, [1]Time, [2]User, [3]Diagram, [4]Action, [5]File, [6]Commit Message, [7]Version, [8]SharePoint Upload Date
+                  // We're removing User from position 2 and keeping the rest
+                  // Preserving original date, time, diagram, action, file, commit message, version
+                  const formattedRow = `${extractedCols[0]},${extractedCols[1]},${extractedCols[3]},${extractedCols[4]},${extractedCols[5]},${extractedCols[6]},${extractedCols[7]},${today}`;
+                  fileContent += formattedRow + '\n';
                 }
               });
               
