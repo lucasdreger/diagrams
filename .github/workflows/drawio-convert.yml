@@ -117,19 +117,32 @@ jobs:
           echo "Listing drawio_files directory:"
           ls -la drawio_files || echo "drawio_files directory not found"
           
-          # For first run or debugging, process all files regardless of changes
-          echo "Processing all .drawio files to generate complete changelog..."
+          # Get the list of changed .drawio files in the current commit
+          CHANGED_FILES=$(git diff --name-only HEAD^ HEAD 2>/dev/null | grep -E "\.drawio$" || echo "")
           
-          # Find all .drawio files and process them - search in current dir AND drawio_files dir if it exists
-          find . -type f -name "*.drawio" -print0 | while IFS= read -r -d $'\0' file; do
-            # Get the base filename without extension, preserving spaces
-            base=$(basename "$file" .drawio)
-            rel_path=$(echo "$file" | sed 's|^\./||')
-            echo "Full file path: $file, Relative path: $rel_path"
+          # If HEAD^ fails (first commit), try against empty tree
+          if [ -z "$CHANGED_FILES" ]; then
+            CHANGED_FILES=$(git diff-tree --name-only --no-commit-id --root -r HEAD | grep -E "\.drawio$" || echo "")
+          fi
+          
+          echo "Files changed in this commit: $CHANGED_FILES"
+          
+          # Only process the .drawio files that were changed in this commit
+          # This preserves all other SVG/HTML files unchanged
+          for changed_file in $CHANGED_FILES; do
+            # Skip if file doesn't exist (e.g. it was deleted)
+            if [ ! -f "$changed_file" ]; then
+              echo "File $changed_file no longer exists, skipping."
+              continue
+            fi
             
-            # Always process all files to ensure complete changelog
+            # Get the base filename without extension, preserving spaces
+            base=$(basename "$changed_file" .drawio)
+            rel_path="$changed_file"
+            echo "Processing changed file: $changed_file"
+            
+            # Flag this as a changed file for changelog
             FILE_CHANGED=true
-            echo "Processing file: $file"
 
             mkdir -p "svg_files"
             output_path="svg_files/${base}.svg"
