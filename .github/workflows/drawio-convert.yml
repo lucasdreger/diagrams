@@ -4,6 +4,8 @@ on:
   push:
     paths:
       - '**/*.drawio'
+      - 'drawio_files/**'
+  workflow_dispatch: # Enable manual triggering
 
 # Add permissions needed for the workflow
 permissions:
@@ -29,6 +31,33 @@ jobs:
           wget https://github.com/jgraph/drawio-desktop/releases/download/v26.2.2/drawio-amd64-26.2.2.deb
           sudo apt-get -f install -y
           sudo dpkg -i drawio-amd64-26.2.2.deb || sudo apt-get -f install -y
+          
+      # Step 2.5: Add .drawio extension to files without extension
+      - name: Add .drawio extension to files without extension
+        run: |
+          # Check if drawio_files directory exists
+          if [ -d "drawio_files" ]; then
+            echo "Checking for files without extension in drawio_files directory..."
+            
+            # Find files without extension in drawio_files directory
+            find drawio_files -type f -not -path "*/\.*" | while read -r file; do
+              # Check if filename contains a dot (which indicates an extension)
+              filename=$(basename "$file")
+              if [[ "$filename" != *.* ]]; then
+                echo "Adding .drawio extension to: $file"
+                mv "$file" "${file}.drawio"
+                
+                # Add and commit the renamed file
+                git add "${file}.drawio"
+                git config --local user.name "github-actions[bot]"
+                git config --local user.email "github-actions[bot]@users.noreply.github.com"
+                git commit -m "Add .drawio extension to $filename"
+                git push "https://${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" HEAD:${GITHUB_REF#refs/heads/}
+              fi
+            done
+          else
+            echo "drawio_files directory not found, skipping extension check."
+          fi
 
       # Step 3: Create output directories
       - name: Create output folders
