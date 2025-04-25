@@ -225,8 +225,8 @@ jobs:
                 echo "Detected update based on commit message keywords"
               fi
               
-              # Get current minor and major versions from git history
-              MINOR_VERSION=$(git log --follow --oneline -- "$file" | wc -l | tr -d ' ')
+              # Get current minor and major versions from git history using the correct variable
+              MINOR_VERSION=$(git log --follow --oneline -- "$changed_file" | wc -l | tr -d ' ')
               MAJOR_VERSION=1
               
               # Check if file exists in previous commits to determine major version
