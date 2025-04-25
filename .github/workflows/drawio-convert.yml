@@ -145,9 +145,57 @@ jobs:
               # Make debug output to understand what's happening
               echo "Creating changelog entries for: $base (${CHANGE_TYPE})"
               
-              # Write to changelogs with commit message
-              echo "$FORMATTED_DATE,$FORMATTED_TIME,\"$AUTHOR\",Converted,\"${base}.drawio\",\"$CHANGE_TYPE\",\"$COMMIT_MSG\"" >> svg_files/CHANGELOG.csv
-              echo "$FORMATTED_DATE,$FORMATTED_TIME,\"$AUTHOR\",Wrapped to HTML,\"${base}.svg\",\"$CHANGE_TYPE\",\"$COMMIT_MSG\"" >> html_files/CHANGELOG.csv
+              # Get enhanced version information using semantic versioning light (MAJOR.MINOR)
+              # Use git history to determine if this is a major or minor change
+              # Start with the commit message - if it contains keywords, categorize the change
+              MAJOR_KEYWORDS="redesign|new version|complete|refactor|overhaul|major"
+              MINOR_UPDATE_KEYWORDS="update|fix|adjust|tweak|enhance|improve|minor"
+              
+              # Default to standard minor change (increment minor version)
+              IS_MAJOR_CHANGE=0
+              CHANGE_DESCRIPTION="Change"
+              
+              # Check commit message for major change keywords (case insensitive)
+              if echo "$COMMIT_MSG" | grep -iE "$MAJOR_KEYWORDS" > /dev/null; then
+                IS_MAJOR_CHANGE=1
+                CHANGE_DESCRIPTION="Major Change"
+                echo "Detected major change based on commit message keywords"
+              # Check for minor update keywords (case insensitive)
+              elif echo "$COMMIT_MSG" | grep -iE "$MINOR_UPDATE_KEYWORDS" > /dev/null; then
+                CHANGE_DESCRIPTION="Update"
+                echo "Detected update based on commit message keywords"
+              fi
+              
+              # Get current minor and major versions from git history
+              MINOR_VERSION=$(git log --follow --oneline -- "$file" | wc -l | tr -d ' ')
+              MAJOR_VERSION=1
+              
+              # Check if file exists in previous commits to determine major version
+              PREV_VERSIONS=$(git log --follow --pretty=format:"%H" -- "$file")
+              if [ -n "$PREV_VERSIONS" ]; then
+                # Count the number of commits containing major change keywords
+                MAJOR_VERSION=$(git log --follow --pretty=format:"%s" -- "$file" | grep -iE "$MAJOR_KEYWORDS" | wc -l | tr -d ' ')
+                # Add 1 because we start at version 1.0
+                MAJOR_VERSION=$((MAJOR_VERSION + 1))
+              fi
+              
+              # Handle new diagrams - they start at 1.0
+              if [ "$CHANGE_TYPE" = "New" ]; then
+                VERSION="1.0"
+              else
+                # For modifications, use the major.minor scheme
+                if [ "$IS_MAJOR_CHANGE" -eq 1 ]; then
+                  # Major change, increment major version, reset minor to 0
+                  VERSION="${MAJOR_VERSION}.0"
+                else
+                  # Minor change, keep major version, increment minor
+                  VERSION="${MAJOR_VERSION}.$((MINOR_VERSION - 1))"
+                fi
+              fi
+              
+              # Write to changelogs with commit message, improved descriptive actions, and change description
+              echo "$FORMATTED_DATE,$FORMATTED_TIME,\"$AUTHOR\",\"Converted .drawio to SVG\",\"${base}.drawio → ${base}.svg\",\"$CHANGE_TYPE ($CHANGE_DESCRIPTION)\",\"$COMMIT_MSG\",\"${VERSION}\"" >> svg_files/CHANGELOG.csv
+              echo "$FORMATTED_DATE,$FORMATTED_TIME,\"$AUTHOR\",\"Generated HTML from SVG\",\"${base}.drawio → ${base}.html\",\"$CHANGE_TYPE ($CHANGE_DESCRIPTION)\",\"$COMMIT_MSG\",\"${VERSION}\"" >> html_files/CHANGELOG.csv
               echo "Added entries to changelog for $file ($CHANGE_TYPE)"
             fi
           done
@@ -194,8 +242,8 @@ jobs:
               const header = lines[0]; // Get header row
               const dataRows = lines.slice(1); // Get data rows
               
-              // Create a properly formatted CSV with all the needed columns including commit message
-              let fileContent = 'Date,Time,User,Action,File,Type,Commit Message,SharePoint Upload Date\n';
+              // Create a properly formatted CSV with all the needed columns including commit message and version
+              let fileContent = 'Date,Time,User,Action,File,Type,Commit Message,Version,SharePoint Upload Date\n';
               
               // Add the data rows with today's upload date
               const today = new Date().toLocaleDateString('en-GB', {
