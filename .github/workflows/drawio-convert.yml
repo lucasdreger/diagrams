@@ -52,6 +52,13 @@ jobs:
                 git config --local user.name "github-actions[bot]"
                 git config --local user.email "github-actions[bot]@users.noreply.github.com"
                 git commit -m "Add .drawio extension to $filename"
+                
+                # Pull changes from remote before pushing to avoid non-fast-forward errors
+                echo "Pulling latest changes from remote repository..."
+                git pull --rebase "https://${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" HEAD:${GITHUB_REF#refs/heads/}
+                
+                # Now push changes
+                echo "Pushing changes to remote repository..."
                 git push "https://${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" HEAD:${GITHUB_REF#refs/heads/}
               fi
             done
