@@ -87,13 +87,11 @@ jobs:
         run: |
           mkdir -p svg_files html_files
           
-          # Initialize CSV changelogs with headers if they don't exist
-          if [ ! -f "svg_files/CHANGELOG.csv" ]; then
-            echo "Date,Time,User,Diagram,Action,File,Commit Message,Version" > svg_files/CHANGELOG.csv
-          fi
+          # Initialize CSV changelog with headers if it doesn't exist - now with commit hash column
           if [ ! -f "html_files/CHANGELOG.csv" ]; then
-            echo "Date,Time,User,Diagram,Action,File,Commit Message,Version" > html_files/CHANGELOG.csv
+            echo "Date,Time,User,Diagram,Action,File,Commit Message,Version,Commit Hash" > html_files/CHANGELOG.csv
           fi
+          # No longer creating changelog in svg_files folder
 
       # Step 4: Convert .drawio files to SVG and wrap them in HTML
       - name: Convert Draw.io files
@@ -259,12 +257,15 @@ jobs:
                 ACTION_DESC="Modified (Update)"
               fi
               
-              # Write to changelogs with the new column order and diagram name
-              # Date, Time, User, Diagram, Action, File, Commit Message, Version
+              # Get the commit hash for this file's change
+              COMMIT_HASH=$(git log -1 --pretty=format:"%H" -- "$changed_file")
+              SHORT_HASH=$(git log -1 --pretty=format:"%h" -- "$changed_file")
+              
+              # Write only to html_files changelog with commit hash column
+              # Date, Time, User, Diagram, Action, File, Commit Message, Version, Commit Hash
               # Properly escape all fields to ensure CSV format integrity
-              echo "$FORMATTED_DATE,$FORMATTED_TIME,\"$AUTHOR\",\"${base}\",\"$ACTION_DESC\",\"${base}.drawio to ${base}.svg\",\"$COMMIT_MSG\",\"$VERSION\"" >> svg_files/CHANGELOG.csv
-              echo "$FORMATTED_DATE,$FORMATTED_TIME,\"$AUTHOR\",\"${base}\",\"$ACTION_DESC\",\"${base}.drawio to ${base}.html\",\"$COMMIT_MSG\",\"$VERSION\"" >> html_files/CHANGELOG.csv
-              echo "Added entries to changelog for $changed_file ($ACTION_DESC)"
+              echo "$FORMATTED_DATE,$FORMATTED_TIME,\"$AUTHOR\",\"${base}\",\"$ACTION_DESC\",\"${base}.drawio to ${base}.html\",\"$COMMIT_MSG\",\"$VERSION\",\"$SHORT_HASH\"" >> html_files/CHANGELOG.csv
+              echo "Added entry to changelog for $changed_file ($ACTION_DESC) with commit $SHORT_HASH"
             fi
           done
 
