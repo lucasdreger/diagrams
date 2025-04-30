@@ -325,8 +325,8 @@ jobs:
               const dataRows = lines.slice(1); // Get data rows
               
               // Create a properly formatted CSV with all the needed columns in the requested order
-              // Date, Time, Diagram, Action, File, Commit Message, Version, SharePoint Upload Date
-              let fileContent = 'Date,Time,Diagram,Action,File,Commit Message,Version,SharePoint Upload Date\n';
+              // Date, Time, Diagram, Action, File, Commit Message, Version, Commit Hash, SharePoint Upload Date
+              let fileContent = 'Date,Time,Diagram,Action,File,Commit Message,Version,Commit Hash,SharePoint Upload Date\n';
               
               // Add the data rows with today's upload date
               const today = new Date().toLocaleDateString('en-GB', {
@@ -380,6 +380,7 @@ jobs:
                       `"${extractedCols[5].replace(/"/g, '""')}"`,  // File
                       `"${extractedCols[6].replace(/"/g, '""')}"`,  // Commit Message
                       extractedCols[7],                      // Version
+                      extractedCols[8],                      // Commit Hash
                       today                                  // SharePoint Upload Date
                     ].join(',');
                     
