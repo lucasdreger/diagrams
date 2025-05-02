@@ -68,14 +68,15 @@ jobs:
                       git add "${file}.drawio"
                       # Also remove the original file if git still tracks it
                       git rm --ignore-unmatch "$file" > /dev/null 2>&1
-                    
-                    git config --local user.name "github-actions[bot]"
-                    git config --local user.email "github-actions[bot]@users.noreply.github.com"
-                    git commit -m "Add .drawio extension to $filename"
-                    
-                    # Push changes immediately to avoid conflicts
-                    echo "Pushing changes to remote repository..."
-                    git push "https://${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" HEAD:${GITHUB_REF#refs/heads/}
+                      
+                      git config --local user.name "github-actions[bot]"
+                      git config --local user.email "github-actions[bot]@users.noreply.github.com"
+                      git commit -m "Add .drawio extension to $filename"
+                      
+                      # Push changes immediately to avoid conflicts
+                      echo "Pushing changes to remote repository..."
+                      git push "https://${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" HEAD:${GITHUB_REF#refs/heads/}"
+                    fi
                   fi
                 else
                   echo "Warning: File $file no longer exists, skipping."
@@ -272,7 +273,7 @@ jobs:
               
               # Check if this is a new diagram or a modification
               # First try with git history, fallback to file existence check
-              if git ls-files --error-unmatch "svg_files/${base}.svg" &>/dev/null 2:/dev/null; then
+              if git ls-files --error-unmatch "svg_files/${base}.svg" &>/dev/null 2>/dev/null; then
                 CHANGE_TYPE="Modified"
               else
                 # Fallback to direct file check before our current conversion
@@ -352,7 +353,7 @@ jobs:
               
               # The changelog entry has already been written by the process_diagram_file function
               echo "Processed $changed_file with version $VERSION (hash: $SHORT_HASH)"
-            fi
+            
           done < /tmp/changed_files.txt
 
       # Step 5: Commit and push changes
