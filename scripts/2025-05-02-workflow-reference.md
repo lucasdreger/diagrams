@@ -1,3 +1,28 @@
+# DrawIO Conversion Workflow Reference (May 2, 2025)
+
+This document contains the current GitHub Actions workflow script used for converting Draw.io diagrams to SVG and HTML formats, creating a changelog, and uploading to SharePoint.
+
+## Purpose
+
+This script automatically processes all modified Draw.io files, converts them to SVG format, creates HTML wrappers, and maintains a detailed changelog with version tracking and commit hash references.
+
+## Key Features
+
+- Processes files with spaces in their names
+- Tracks file changes using Git integration
+- Extracts commit hashes for change tracking
+- Maintains a comprehensive changelog
+- Converts diagrams using the Draw.io CLI
+- Detects new vs. modified diagrams
+- Implements versioning (1.0, 1.1, 2.0, etc.)
+- Uploads the changelog to SharePoint
+
+## Current Implementation (as of May 2, 2025)
+
+Below is the complete GitHub Actions workflow:
+
+```yaml
+# GitHub Actions Workflow - drawio-convert.yml
 name: Convert Draw.io Files
 
 on:
@@ -5,16 +30,12 @@ on:
     paths:
       - '**/*.drawio'
       - 'drawio_files/**'
-  workflow_dispatch: # Enable manual triggering
-
-# Add permissions needed for the workflow
-permissions:
-  contents: write
+  # Allow manual triggering
+  workflow_dispatch:
 
 jobs:
   convert:
     runs-on: ubuntu-latest
-
     steps:
       # Step 1: Check out the repository with history to detect changes
       - name: Check out the repository
@@ -85,7 +106,9 @@ jobs:
             done
           else
             echo "drawio_files directory not found, skipping extension check."
-          fi          # Step 3: Create output directories
+          fi
+          
+      # Step 3: Create output directories
       - name: Create output folders
         run: |
           mkdir -p svg_files html_files
@@ -445,8 +468,8 @@ jobs:
           # Add our changes
           git add svg_files html_files
           
-          # Only commit if there are changes
-          if git diff --staged --quiet; then
+          # Check if there are changes to commit
+          if git diff --cached --quiet; then
             echo "No changes to commit"
             echo "changes_made=false" >> $GITHUB_OUTPUT
           else
@@ -544,7 +567,6 @@ jobs:
                       extractedCols[7] || '',                // Version
                       extractedCols[8] || ''                 // Commit Hash
                     ].join(',');
-                    ].join(',');
                     
                     fileContent += formattedRow + '\n';
                   } catch (error) {
@@ -554,7 +576,7 @@ jobs:
                 }
               });
               
-              console.log(`Formatted changelog with ${dataRows.length} entries and SharePoint upload date column`);
+              console.log(`Formatted changelog with ${dataRows.length} entries`);
               
               // Function to make HTTP requests with promises
               const httpRequest = (options, postData) => {
@@ -565,12 +587,14 @@ jobs:
                     res.on('end', () => {
                       if (res.statusCode >= 200 && res.statusCode < 300) {
                         try {
-                          resolve(data.length > 0 ? JSON.parse(data) : {});
+                          const parsedData = data ? JSON.parse(data) : {};
+                          resolve(parsedData);
                         } catch (e) {
-                          resolve(data); // Not JSON, return as string
+                          console.error('Error parsing response:', e);
+                          resolve(data); // Return raw data if not JSON
                         }
                       } else {
-                        reject(new Error(`HTTP Error: ${res.statusCode} ${data}`));
+                        reject(new Error(`Request failed with status code ${res.statusCode}: ${data}`));
                       }
                     });
                   });
@@ -620,8 +644,7 @@ jobs:
                   hostname: 'graph.microsoft.com',
                   path: `/v1.0/sites/${process.env.SITE_ID}`,
                   headers: {
-                    'Authorization': `Bearer ${tokenData.access_token}`,
-                    'Accept': 'application/json'
+                    'Authorization': `Bearer ${tokenData.access_token}`
                   }
                 };
                 
@@ -630,20 +653,21 @@ jobs:
               } catch (siteError) {
                 console.error('Error verifying site:', siteError.message);
                 console.log('Trying alternative site path format...');
+                
                 // If the site ID doesn't work, try a different format
                 const originalSiteId = process.env.SITE_ID;
                 try {
                   // Try sites/SiteName format
                   if (!originalSiteId.startsWith('sites/')) {
                     process.env.SITE_ID = `sites/${originalSiteId.split('/').pop()}`;
+                    console.log(`Using alternative site ID format: ${process.env.SITE_ID}`);
                   } else {
-                    // Or try domain,sites,SiteName format
-                    process.env.SITE_ID = `frostaag.sharepoint.com,${originalSiteId.replace('/', ',')}`;
+                    console.error('Unable to find site with provided ID');
+                    throw siteError;
                   }
-                  console.log(`Using alternative site ID format: ${process.env.SITE_ID}`);
                 } catch (formatError) {
-                  console.error('Error reformatting site ID:', formatError);
-                  // Keep the original if parsing fails
+                  console.error('Error reformatting site ID:', formatError.message);
+                  throw siteError;
                 }
               }
               
@@ -653,8 +677,7 @@ jobs:
                 hostname: 'graph.microsoft.com',
                 path: `/v1.0/sites/${process.env.SITE_ID}/drives`,
                 headers: {
-                  'Authorization': `Bearer ${tokenData.access_token}`,
-                  'Accept': 'application/json'
+                  'Authorization': `Bearer ${tokenData.access_token}`
                 }
               };
               
@@ -662,7 +685,7 @@ jobs:
               const drivesData = await httpRequest(drivesOptions);
               
               if (!drivesData.value || drivesData.value.length === 0) {
-                throw new Error(`No drives found for site: ${process.env.SITE_ID}`);
+                throw new Error(`No drives found for site ID: ${process.env.SITE_ID}`);
               }
               
               console.log('Available drives:');
@@ -672,8 +695,9 @@ jobs:
               console.log('Looking for document library named "Shared Documents"');
               const documentsDrive = drivesData.value.find(d => 
                 d.name === 'Shared Documents' || 
-                d.name === 'Documents' || 
-                d.name.includes('Document')
+                d.name === 'Documents' ||
+                d.name === 'Shared Files' ||
+                d.name === 'Shared'
               );
               
               let driveId;
@@ -681,67 +705,62 @@ jobs:
                 driveId = documentsDrive.id;
                 console.log(`Selected document library: ${documentsDrive.name} (${driveId})`);
               } else {
-                // Fall back to first drive
+                // If no specific document library found, use the first drive
                 driveId = drivesData.value[0].id;
-                console.log(`No document library found, using first available drive: ${drivesData.value[0].name} (${driveId})`);
+                console.log(`Using first available drive: ${drivesData.value[0].name} (${driveId})`);
               }
               
-              // Step 3: Upload the file - use consistent filename instead of date-stamped
-              const fileName = 'Diagrams_Changelog.csv';  // Fixed filename that will be overwritten each time
-              const folderPath = 'Diagrams';  // Target folder in SharePoint DatasphereFileStorage site
-              console.log(`Uploading changelog as ${fileName} to folder "${folderPath}" in drive ${driveId}...`);
+              // Create the target path - folder structure
+              const targetFolder = process.env.SHAREPOINT_FOLDER || 'Diagrams'; // Default to 'Diagrams' if not specified
               
-              // Create the folder if it doesn't exist
+              // Step 3: Create the folder if it doesn't exist
+              console.log(`Ensuring folder exists: ${targetFolder}`);
+              
               try {
-                const folderCheckOptions = {
+                // Try to get the folder to see if it exists
+                const folderOptions = {
                   method: 'GET',
                   hostname: 'graph.microsoft.com',
-                  path: `/v1.0/sites/${process.env.SITE_ID}/drives/${driveId}/root:/${folderPath}`,
+                  path: `/v1.0/drives/${driveId}/root:/${encodeURIComponent(targetFolder)}`,
                   headers: {
-                    'Authorization': `Bearer ${tokenData.access_token}`,
-                    'Accept': 'application/json'
+                    'Authorization': `Bearer ${tokenData.access_token}`
                   }
                 };
                 
-                // Check if folder exists
-                try {
-                  await httpRequest(folderCheckOptions);
-                  console.log(`Folder "${folderPath}" already exists`);
-                } catch (folderError) {
-                  if (folderError.message.includes('404')) {
-                    // Folder doesn't exist, create it
-                    console.log(`Creating folder "${folderPath}"...`);
-                    const createFolderOptions = {
-                      method: 'PATCH',
-                      hostname: 'graph.microsoft.com',
-                      path: `/v1.0/sites/${process.env.SITE_ID}/drives/${driveId}/root/children`,
-                      headers: {
-                        'Authorization': `Bearer ${tokenData.access_token}`,
-                        'Content-Type': 'application/json',
-                        'Accept': 'application/json'
-                      }
-                    };
-                    
-                    await httpRequest(createFolderOptions, JSON.stringify({
-                      name: folderPath,
-                      folder: {},
-                      '@microsoft.graph.conflictBehavior': 'rename'
-                    }));
-                    console.log(`Folder "${folderPath}" created successfully`);
-                  } else {
-                    throw folderError;
+                await httpRequest(folderOptions);
+                console.log(`Folder ${targetFolder} already exists.`);
+              } catch (folderError) {
+                // Folder doesn't exist, create it
+                console.log(`Creating folder ${targetFolder}...`);
+                
+                const createFolderOptions = {
+                  method: 'POST',
+                  hostname: 'graph.microsoft.com',
+                  path: `/v1.0/drives/${driveId}/root/children`,
+                  headers: {
+                    'Authorization': `Bearer ${tokenData.access_token}`,
+                    'Content-Type': 'application/json'
                   }
-                }
-              } catch (folderCreateError) {
-                console.error(`Error managing folder "${folderPath}":`, folderCreateError.message);
-                console.log('Will attempt to upload to the folder anyway...');
+                };
+                
+                const folderData = JSON.stringify({
+                  name: targetFolder,
+                  folder: {},
+                  '@microsoft.graph.conflictBehavior': 'rename'
+                });
+                
+                await httpRequest(createFolderOptions, folderData);
+                console.log(`Folder ${targetFolder} created successfully.`);
               }
               
-              // Upload file to the specified folder
+              // Step 4: Upload the changelog file
+              const filename = 'CHANGELOG.csv';
+              console.log(`Uploading ${filename} to ${targetFolder}...`);
+              
               const uploadOptions = {
                 method: 'PUT',
                 hostname: 'graph.microsoft.com',
-                path: `/v1.0/sites/${process.env.SITE_ID}/drives/${driveId}/root:/${folderPath}/${fileName}:/content`,
+                path: `/v1.0/drives/${driveId}/root:/${encodeURIComponent(targetFolder)}/${encodeURIComponent(filename)}:/content`,
                 headers: {
                   'Authorization': `Bearer ${tokenData.access_token}`,
                   'Content-Type': 'text/csv',
@@ -749,17 +768,27 @@ jobs:
                 }
               };
               
-              const uploadData = await httpRequest(uploadOptions, fileContent);
-              console.log('Successfully uploaded changelog to SharePoint');
-              console.log(`File URL: ${uploadData.webUrl}`);
+              const uploadResult = await httpRequest(uploadOptions, fileContent);
+              console.log(`File uploaded successfully to SharePoint. WebUrl: ${uploadResult.webUrl}`);
               
             } catch (error) {
               console.error('Error uploading to SharePoint:', error.message);
-              // Don't fail the workflow if SharePoint upload fails
+              // Don't fail the build if SharePoint upload fails
             }
-        env:
-          TENANT_ID: ${{ secrets.TENANT_ID }}
-          CLIENT_ID: ${{ secrets.CLIENT_ID }}
-          CLIENT_SECRET: ${{ secrets.CLIENT_SECRET }}
-          SITE_ID: ${{ secrets.SITE_ID }}
-          DRIVE_ID: ${{ secrets.DRIVE_ID || 'auto' }}
+```
+
+## Changelog Format
+
+The CHANGELOG.csv file has the following columns:
+
+| Column | Description |
+|--------|-------------|
+| Date | The date when the change was processed (dd.mm.yyyy) |
+| Time | The time when the change was processed (hh:mm:ss) |
+| User | The Git username of the person who made the change |
+| Diagram | The name of the diagram without extension |
+| Action | Either "New" or "Modified (Update)" |
+| File | The conversion path (e.g., "diagram.drawio to diagram.html") |
+| Commit Message | The Git commit message associated with the change |
+| Version | The calculated version number (e.g., "1.0", "1.1", "2.0") |
+| Commit Hash | The short Git commit hash for tracking |

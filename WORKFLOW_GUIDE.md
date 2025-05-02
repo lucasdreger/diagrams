@@ -21,10 +21,19 @@ The workflow processes only files that were changed in the current commit, inclu
 ## Key Features
 
 1. **Automatic Conversion**: Converts all modified `.drawio` files to SVG and HTML
-2. **Changelog Generation**: Records all changes with metadata (author, date, version, etc.)
+2. **Changelog Generation**: Records all changes with complete metadata including:
+   - Date and time of change
+   - Author (from git commits)
+   - Diagram name
+   - Action type (New/Modified)
+   - File path
+   - Commit message
+   - Version number
+   - Commit hash
 3. **Version Tracking**: Implements semantic versioning (MAJOR.MINOR) for diagrams
 4. **SharePoint Integration**: Uploads the changelog to SharePoint for wider visibility
 5. **Special Handling for Filenames with Spaces**: Custom logic to ensure files with spaces are processed correctly
+6. **Change Tracking**: Uses git commit hashes to link each change to its specific commit
 
 ## How Filenames with Spaces are Handled
 
@@ -67,9 +76,10 @@ Files with spaces in their names (e.g., "System Architecture - Version 2.drawio"
    - Converts to SVG with `drawio -x -f svg -o "$output_path" "$input_file"`
    - Creates HTML wrapper
    - Determines change type (New/Modified) and version
-4. **Update Changelog**: Adds entries for each processed file, including commit hash
+   - Extracts the commit hash for tracking
+4. **Update Changelog**: Adds entries for each processed file with all metadata including commit hash
 5. **Commit Changes**: Commits the generated SVG/HTML files
-6. **Upload to SharePoint**: Uploads the changelog with commit hashes to SharePoint
+6. **Upload to SharePoint**: Uploads the changelog with complete metadata including commit hashes
 
 ## Resolving Common Issues
 
@@ -85,7 +95,7 @@ Files with spaces in their names (e.g., "System Architecture - Version 2.drawio"
 
 ## Commit Hash Tracking
 
-Each changelog entry includes a short commit hash for tracking purposes. The commit hash is stored in the "Commit Hash" column (column 8) of the CHANGELOG.csv file and is also preserved when uploading to SharePoint. This allows for easy tracking of which commit introduced each change to a diagram file.
+Each changelog entry includes a short commit hash for tracking purposes. The commit hash is stored in the "Commit Hash" column (column 8) of the CHANGELOG.csv file and is preserved when uploading to SharePoint. This allows for easy tracking of which commit introduced each change to a diagram file.
 
 ### Using Commit Hashes
 
@@ -128,5 +138,23 @@ The short hash format (e.g., "abcd123") is used in the changelog for readability
 - New files start at version 1.0
 - Minor changes increment the minor version (e.g., 1.0 → 1.1)
 - Major changes (detected via keywords) increment the major version and reset minor (e.g., 1.1 → 2.0)
+
+## Changelog Format
+
+The CHANGELOG.csv file has the following columns:
+
+| Column | Description |
+|--------|-------------|
+| Date | The date when the change was processed (dd.mm.yyyy) |
+| Time | The time when the change was processed (hh:mm:ss) |
+| User | The Git username of the person who made the change |
+| Diagram | The name of the diagram without extension |
+| Action | Either "New" or "Modified (Update)" |
+| File | The conversion path (e.g., "diagram.drawio to diagram.html") |
+| Commit Message | The Git commit message associated with the change |
+| Version | The calculated version number (e.g., "1.0", "1.1", "2.0") |
+| Commit Hash | The short Git commit hash for tracking |
+
+This format is preserved when uploading to SharePoint, ensuring all metadata is available for reference.
 
 ## Last Updated: May 2, 2025
