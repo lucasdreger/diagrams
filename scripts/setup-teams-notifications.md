@@ -33,7 +33,7 @@ The workflow is configured to send notifications to a Microsoft Teams channel wh
 2. Click on "Settings"
 3. In the left sidebar, click on "Secrets and variables" > "Actions"
 4. Click "New repository secret"
-5. Name: `TEAMS_WEBHOOK_URL`
+5. Name: `TEAMS_WEBHOOK`
 6. Value: Paste the webhook URL you copied from Teams
 7. Click "Add secret"
 
