@@ -96,27 +96,10 @@ jobs:
       # Step 4: Convert .drawio files to SVG and wrap them in HTML
       - name: Convert Draw.io files
         run: |
-          # We'll process all .drawio files with spaces in their names
-          FORCE_PROCESS_SPACES=true
-          
-          # Set up virtual display for headless operation with better configuration
-          echo "Starting Xvfb with improved settings..."
-          Xvfb :99 -screen 0 1920x1080x24 -ac +extension RANDR &
+          # Set up virtual display for headless operation
+          Xvfb :99 -screen 0 1024x768x16 &
           export DISPLAY=:99
-          sleep 2 # Give Xvfb more time to start
-          
-          # Check if Xvfb started successfully
-          if ! xdpyinfo -display :99 >/dev/null 2>&1; then
-            echo "ERROR: Xvfb failed to start properly. Trying alternate configuration..."
-            # Try an alternate configuration
-            killall Xvfb 2>/dev/null || true
-            Xvfb :99 -screen 0 1024x768x16 -nolisten tcp &
-            export DISPLAY=:99
-            sleep 3
-          fi
-          
-          echo "Xvfb process info:"
-          ps aux | grep Xvfb
+          sleep 1 # Give Xvfb time to start
 
           # Use a different approach - temporary script
           cat > /tmp/convert-drawio.sh << 'EOL'
@@ -133,73 +116,18 @@ jobs:
           ls -la drawio_files || echo "drawio_files directory not found"
           
           # Get the list of changed .drawio files in the current commit
-          echo "Looking for changed .drawio files in this commit..."
           CHANGED_FILES=$(git diff --name-only HEAD^ HEAD 2>/dev/null | grep -E "\.drawio$" || echo "")
           
           # If HEAD^ fails (first commit), try against empty tree
           if [ -z "$CHANGED_FILES" ]; then
-            echo "No changes found with first method, trying diff-tree..."
             CHANGED_FILES=$(git diff-tree --name-only --no-commit-id --root -r HEAD | grep -E "\.drawio$" || echo "")
           fi
           
-          # For newly added files, we need to check the status differently
-          # This will find new (untracked) and newly added files
-          echo "Looking for untracked .drawio files..."
-          NEW_FILES=$(git ls-files --others --exclude-standard | grep -E "\.drawio$" || echo "")
-          echo "Untracked .drawio files: $NEW_FILES"
+          echo "Files changed in this commit: $CHANGED_FILES"
           
-          echo "Looking for newly added .drawio files in this commit..."
-          git diff --name-status HEAD^ HEAD 2>/dev/null | grep "^A" || echo "No newly added files found in git diff"
-          NEWLY_ADDED_FILES=$(git diff --name-status HEAD^ HEAD 2>/dev/null | grep "^A" | grep -E "\.drawio$" | awk '{print $2}' || echo "")
-          echo "Newly added .drawio files: $NEWLY_ADDED_FILES"
-          
-          # Create a clean file list first
-          rm -f /tmp/changed_files.txt
-          touch /tmp/changed_files.txt
-          
-          # Combine all file lists, avoiding duplicates
-          for file in $CHANGED_FILES $NEW_FILES $NEWLY_ADDED_FILES; do
-            if [ -n "$file" ]; then
-              echo "$file" >> /tmp/changed_files.txt
-            fi
-          done
-          
-          # Find all .drawio files with spaces in their names and add them explicitly
-          echo "Looking for any .drawio files with spaces in their names..."
-          find . -name "*.drawio" -type f | grep " " | while read -r file_with_spaces; do
-            # Remove leading ./ if present
-            clean_path=${file_with_spaces#./}
-            echo "Found file with spaces: $clean_path"
-            # Add to our processing list
-            echo "$clean_path" >> /tmp/changed_files.txt
-            echo "Added file with spaces to the processing list: $clean_path"
-          done
-          
-          # Remove duplicates from the file
-          sort /tmp/changed_files.txt | uniq > /tmp/changed_files_uniq.txt
-          mv /tmp/changed_files_uniq.txt /tmp/changed_files.txt
-          
-          echo "Files to process:"
-          cat /tmp/changed_files.txt
-          
-          # If we have no files to process but FORCE_PROCESS_SPACES is true,
-          # find at least one .drawio file with spaces to process
-          if [ ! -s "/tmp/changed_files.txt" ] && [ "$FORCE_PROCESS_SPACES" = true ]; then
-            echo "No files detected for processing. Finding files with spaces manually."
-            find_result=$(find drawio_files -name "*.drawio" -type f | grep " " | head -1)
-            if [ -n "$find_result" ]; then
-              # Remove leading ./ if present
-              clean_path=${find_result#./}
-              echo "Adding file with spaces to process: $clean_path"
-              echo "$clean_path" > /tmp/changed_files.txt
-            else
-              echo "No files with spaces found in drawio_files directory."
-            fi
-          fi
-          
-          # Process each file, handling spaces correctly by using a file to store paths
-          while IFS= read -r changed_file || [ -n "$changed_file" ]; do
-            # No special case needed anymore - each line is a complete file path
+          # Only process the .drawio files that were changed in this commit
+          # This preserves all other SVG/HTML files unchanged
+          for changed_file in $CHANGED_FILES; do
             # Skip if file doesn't exist (e.g. it was deleted)
             if [ ! -f "$changed_file" ]; then
               echo "File $changed_file no longer exists, skipping."
@@ -217,9 +145,7 @@ jobs:
             mkdir -p "svg_files"
             output_path="svg_files/${base}.svg"
             
-            echo "Converting $changed_file to SVG..."
             # Run the conversion with xvfb-run - quote variables to handle spaces properly
-            echo "Using primary conversion method..."
             xvfb-run -a /tmp/convert-drawio.sh "$changed_file" "$output_path"
             
             # Check if conversion succeeded
@@ -227,19 +153,6 @@ jobs:
               echo "Failed to convert $changed_file to SVG. Trying alternative method..."
               # Alternative approach using node directly if installed with drawio
               xvfb-run -a drawio -x -f svg -o "$output_path" "$changed_file"
-              
-              # If still failed, show more detailed error info
-              if [ ! -f "$output_path" ]; then
-                echo "ERROR: Both conversion methods failed for $changed_file"
-                echo "File info:"
-                ls -la "$changed_file"
-                echo "Content preview (first 100 bytes):"
-                head -c 100 "$changed_file" | hexdump -C
-              else
-                echo "Alternative conversion method succeeded for $changed_file"
-              fi
-            else
-              echo "Successfully converted $changed_file to SVG"
             fi
 
             # Create an HTML wrapper
@@ -271,25 +184,17 @@ jobs:
               FORMATTED_TIME=$(date +"%H:%M:%S")
               
               # Check if this is a new diagram or a modification
-              # First check if this is a newly added file in the current commit
-              if git diff --name-status HEAD^ HEAD 2>/dev/null | grep "^A" | grep -q "$changed_file"; then
-                echo "Detected newly added file in this commit: $changed_file"
-                CHANGE_TYPE="New"
-              # Then check if the file is untracked (completely new)
-              elif git ls-files --others --exclude-standard | grep -q "$changed_file"; then
-                echo "Detected untracked new file: $changed_file"
-                CHANGE_TYPE="New" 
-              # Check if SVG already exists (meaning it's been processed before)
-              elif git ls-files --error-unmatch "svg_files/${base}.svg" &>/dev/null 2>/dev/null; then
-                CHANGE_TYPE="Modified"
-              # Fallback to direct file check before our current conversion
-              elif [ -f "svg_files/${base}.svg" ]; then
+              # First try with git history, fallback to file existence check
+              if git ls-files --error-unmatch "svg_files/${base}.svg" &>/dev/null 2>/dev/null; then
                 CHANGE_TYPE="Modified"
               else
-                CHANGE_TYPE="New"
+                # Fallback to direct file check before our current conversion
+                if [ -f "svg_files/${base}.svg.old" ]; then
+                  CHANGE_TYPE="Modified"
+                else
+                  CHANGE_TYPE="New"
+                fi
               fi
-              
-              echo "Change type determined for $changed_file: $CHANGE_TYPE"
               
               # Make sure changelog directory exists
               mkdir -p svg_files html_files
