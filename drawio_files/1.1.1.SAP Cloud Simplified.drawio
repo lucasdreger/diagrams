@@ -35,7 +35,7 @@
           <mxGeometry x="90" y="1959" width="160" height="57" as="geometry" />
         </mxCell>
         <mxCell id="zNKmMtTE5GEm2VwHuhXo-11" value="..." style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#5d36ff;fillColor=#FFFFFF;arcSize=24;absoluteArcSize=1;imageWidth=64;imageHeight=64;strokeWidth=1.5;" vertex="1" parent="1">
-          <mxGeometry x="90" y="2040" width="160" height="57" as="geometry" />
+          <mxGeometry x="127.46000000000001" y="2050" width="160" height="57" as="geometry" />
         </mxCell>
         <mxCell id="zNKmMtTE5GEm2VwHuhXo-12" value="Microsoft Azure" style="text;strokeColor=none;fillColor=none;html=1;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=20;" vertex="1" parent="1">
           <mxGeometry x="-312.27" y="1841" width="60" height="30" as="geometry" />
