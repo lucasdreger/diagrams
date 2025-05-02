@@ -544,7 +544,6 @@ jobs:
                       extractedCols[7] || '',                // Version
                       extractedCols[8] || ''                 // Commit Hash
                     ].join(',');
-                    ].join(',');
                     
                     fileContent += formattedRow + '\n';
                   } catch (error) {
@@ -554,7 +553,7 @@ jobs:
                 }
               });
               
-              console.log(`Formatted changelog with ${dataRows.length} entries and SharePoint upload date column`);
+              console.log(`Formatted changelog with ${dataRows.length} entries`);
               
               // Function to make HTTP requests with promises
               const httpRequest = (options, postData) => {

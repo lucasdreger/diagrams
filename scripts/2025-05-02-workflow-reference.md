@@ -2,6 +2,8 @@
 
 This document contains the current GitHub Actions workflow script used for converting Draw.io diagrams to SVG and HTML formats, creating a changelog, and uploading to SharePoint.
 
+> **Note**: This reference was updated on May 2, 2025 to fix a syntax error in the SharePoint upload script where there was a duplicate closing bracket in the `formattedRow` array.
+
 ## Purpose
 
 This script automatically processes all modified Draw.io files, converts them to SVG format, creates HTML wrappers, and maintains a detailed changelog with version tracking and commit hash references.
