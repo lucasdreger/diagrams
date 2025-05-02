@@ -96,10 +96,24 @@ jobs:
       # Step 4: Convert .drawio files to SVG and wrap them in HTML
       - name: Convert Draw.io files
         run: |
-          # Set up virtual display for headless operation
-          Xvfb :99 -screen 0 1024x768x16 &
+          # Set up virtual display for headless operation with better configuration
+          echo "Starting Xvfb with improved settings..."
+          Xvfb :99 -screen 0 1920x1080x24 -ac +extension RANDR &
           export DISPLAY=:99
-          sleep 1 # Give Xvfb time to start
+          sleep 2 # Give Xvfb more time to start
+          
+          # Check if Xvfb started successfully
+          if ! xdpyinfo -display :99 >/dev/null 2>&1; then
+            echo "ERROR: Xvfb failed to start properly. Trying alternate configuration..."
+            # Try an alternate configuration
+            killall Xvfb 2>/dev/null || true
+            Xvfb :99 -screen 0 1024x768x16 -nolisten tcp &
+            export DISPLAY=:99
+            sleep 3
+          fi
+          
+          echo "Xvfb process info:"
+          ps aux | grep Xvfb
 
           # Use a different approach - temporary script
           cat > /tmp/convert-drawio.sh << 'EOL'
@@ -116,14 +130,44 @@ jobs:
           ls -la drawio_files || echo "drawio_files directory not found"
           
           # Get the list of changed .drawio files in the current commit
+          echo "Looking for changed .drawio files in this commit..."
           CHANGED_FILES=$(git diff --name-only HEAD^ HEAD 2>/dev/null | grep -E "\.drawio$" || echo "")
           
           # If HEAD^ fails (first commit), try against empty tree
           if [ -z "$CHANGED_FILES" ]; then
+            echo "No changes found with first method, trying diff-tree..."
             CHANGED_FILES=$(git diff-tree --name-only --no-commit-id --root -r HEAD | grep -E "\.drawio$" || echo "")
           fi
           
-          echo "Files changed in this commit: $CHANGED_FILES"
+          # For newly added files, we need to check the status differently
+          # This will find new (untracked) and newly added files
+          echo "Looking for untracked .drawio files..."
+          NEW_FILES=$(git ls-files --others --exclude-standard | grep -E "\.drawio$" || echo "")
+          echo "Untracked .drawio files: $NEW_FILES"
+          
+          echo "Looking for newly added .drawio files in this commit..."
+          git diff --name-status HEAD^ HEAD 2>/dev/null | grep "^A" || echo "No newly added files found in git diff"
+          NEWLY_ADDED_FILES=$(git diff --name-status HEAD^ HEAD 2>/dev/null | grep "^A" | grep -E "\.drawio$" | awk '{print $2}' || echo "")
+          echo "Newly added .drawio files: $NEWLY_ADDED_FILES"
+          
+          # Explicitly check for Untitled Diagram24.drawio
+          if [ -f "drawio_files/Untitled Diagram24.drawio" ]; then
+            echo "Untitled Diagram24.drawio exists in drawio_files directory"
+            # Force-add it to the list if it exists but wasn't caught by other methods
+            if ! echo "$CHANGED_FILES $NEW_FILES $NEWLY_ADDED_FILES" | grep -q "Untitled Diagram24.drawio"; then
+              echo "Adding Untitled Diagram24.drawio to the processing list"
+              NEWLY_ADDED_FILES="$NEWLY_ADDED_FILES drawio_files/Untitled Diagram24.drawio"
+            fi
+          else
+            echo "Untitled Diagram24.drawio does NOT exist in drawio_files directory"
+          fi
+          
+          # Combine all file lists, avoiding duplicates
+          ALL_FILES="$CHANGED_FILES $NEW_FILES $NEWLY_ADDED_FILES"
+          # Remove duplicates while preserving order
+          CHANGED_FILES=$(echo "$ALL_FILES" | tr ' ' '\n' | awk '!seen[$0]++' | tr '\n' ' ')
+          
+          echo "Files changed/added in this commit: $CHANGED_FILES"
           
           # Only process the .drawio files that were changed in this commit
           # This preserves all other SVG/HTML files unchanged
@@ -145,7 +189,9 @@ jobs:
             mkdir -p "svg_files"
             output_path="svg_files/${base}.svg"
             
+            echo "Converting $changed_file to SVG..."
             # Run the conversion with xvfb-run - quote variables to handle spaces properly
+            echo "Using primary conversion method..."
             xvfb-run -a /tmp/convert-drawio.sh "$changed_file" "$output_path"
             
             # Check if conversion succeeded
@@ -153,6 +199,19 @@ jobs:
               echo "Failed to convert $changed_file to SVG. Trying alternative method..."
               # Alternative approach using node directly if installed with drawio
               xvfb-run -a drawio -x -f svg -o "$output_path" "$changed_file"
+              
+              # If still failed, show more detailed error info
+              if [ ! -f "$output_path" ]; then
+                echo "ERROR: Both conversion methods failed for $changed_file"
+                echo "File info:"
+                ls -la "$changed_file"
+                echo "Content preview (first 100 bytes):"
+                head -c 100 "$changed_file" | hexdump -C
+              else
+                echo "Alternative conversion method succeeded for $changed_file"
+              fi
+            else
+              echo "Successfully converted $changed_file to SVG"
             fi
 
             # Create an HTML wrapper
@@ -184,17 +243,25 @@ jobs:
               FORMATTED_TIME=$(date +"%H:%M:%S")
               
               # Check if this is a new diagram or a modification
-              # First try with git history, fallback to file existence check
-              if git ls-files --error-unmatch "svg_files/${base}.svg" &>/dev/null 2>/dev/null; then
+              # First check if this is a newly added file in the current commit
+              if git diff --name-status HEAD^ HEAD 2>/dev/null | grep "^A" | grep -q "$changed_file"; then
+                echo "Detected newly added file in this commit: $changed_file"
+                CHANGE_TYPE="New"
+              # Then check if the file is untracked (completely new)
+              elif git ls-files --others --exclude-standard | grep -q "$changed_file"; then
+                echo "Detected untracked new file: $changed_file"
+                CHANGE_TYPE="New" 
+              # Check if SVG already exists (meaning it's been processed before)
+              elif git ls-files --error-unmatch "svg_files/${base}.svg" &>/dev/null 2>/dev/null; then
+                CHANGE_TYPE="Modified"
+              # Fallback to direct file check before our current conversion
+              elif [ -f "svg_files/${base}.svg" ]; then
                 CHANGE_TYPE="Modified"
               else
-                # Fallback to direct file check before our current conversion
-                if [ -f "svg_files/${base}.svg.old" ]; then
-                  CHANGE_TYPE="Modified"
-                else
-                  CHANGE_TYPE="New"
-                fi
+                CHANGE_TYPE="New"
               fi
+              
+              echo "Change type determined for $changed_file: $CHANGE_TYPE"
               
               # Make sure changelog directory exists
               mkdir -p svg_files html_files
