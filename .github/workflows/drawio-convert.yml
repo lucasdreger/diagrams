@@ -823,7 +823,7 @@ jobs:
           )
           
           # Send the payload to Teams webhook
-          curl -H "Content-Type: application/json" -d "$PAYLOAD" "${{ secrets.TEAMS_WEBHOOK_URL }}"
+          curl -H "Content-Type: application/json" -d "$PAYLOAD" "${{ secrets.TEAMS_WEBHOOK }}"
 
       # This step runs only on failure
       - name: Send Teams failure notification
@@ -882,4 +882,4 @@ jobs:
           )
           
           # Send the payload to Teams webhook
-          curl -H "Content-Type: application/json" -d "$PAYLOAD" "${{ secrets.TEAMS_WEBHOOK_URL }}"
+          curl -H "Content-Type: application/json" -d "$PAYLOAD" "${{ secrets.TEAMS_WEBHOOK }}"

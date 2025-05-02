@@ -1,45 +1,30 @@
-#!/bin/zsh
-# Debug test for Teams webhook - this file won't be committed to the repo
-# 
-# Instructions:
-#
-# 1. Add your Teams webhook URL on the line below between the quotes
-WEBHOOK_URL=""
-#
-# 2. Run this script:
-#    zsh debug_webhook.sh
-#
-# 3. Delete this file when done testing
-#
-
-if [ -z "$WEBHOOK_URL" ]; then
-  echo "Please edit this file and add your webhook URL between the quotes"
-  exit 1
-fi
+WEBHOOK_URL="https://frostaag.webhook.office.com/webhookb2/9cfe5169-8ba4-4923-b8d5-3ceacb07866c@a8d22be6-5bda-4bd7-8278-226c60c037ed/IncomingWebhook/abc6eb0b6dec40718c68279edf44821e/8c244c0d-59d9-4113-9646-16bf549a4a64/V2GAqcWDW37bHUcSPdN2Xwla4SyxujUouERQAlidZrsiI1"
 
 # Create a simple payload
-PAYLOAD='{
-  "@type": "MessageCard",
-  "@context": "http://schema.org/extensions",
-  "themeColor": "FF9900",
-  "summary": "Debug Test",
-  "sections": [
+PAYLOAD="{
+  \"@type\": \"MessageCard\",
+  \"@context\": \"http://schema.org/extensions\",
+  \"themeColor\": \"FF9900\",
+  \"summary\": \"Debug Test\",
+  \"sections\": [
     {
-      "activityTitle": "⚙️ Debug Webhook Test",
-      "activitySubtitle": "'$(date +'%d.%m.%Y %H:%M:%S')'",
-      "facts": [
+      \"activityTitle\": \"⚙️ Debug Webhook Test\",
+      \"activitySubtitle\": \"$(date +\"%d.%m.%Y %H:%M:%S\")\",
+      \"activityImage\": \"https://github.com/lucasdreger.png?size=40\",
+      \"facts\": [
         {
-          "name": "Testing",
-          "value": "Direct webhook URL"
+          \"name\": \"Testing\",
+          \"value\": \"Direct webhook URL\"
         }
       ],
-      "text": "This is a direct test with hard-coded webhook URL. If this works but the GitHub action doesn'\''t, there'\''s an issue with how the secret is accessed."
+      \"text\": \"This is a direct test with hard-coded webhook URL.\"
     }
   ]
-}'
+}"
 
 # Send the test message
 echo "Sending debug webhook test..."
 curl -H "Content-Type: application/json" -d "$PAYLOAD" "$WEBHOOK_URL"
 
-echo -e "\nDebug test complete!"
+echo -e "
+Debug test complete!"
