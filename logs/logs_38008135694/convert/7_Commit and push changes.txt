@@ -1,0 +1,31 @@
+﻿2025-05-02T14:52:04.3180675Z ##[group]Run git config --local user.name "github-actions[bot]"
+2025-05-02T14:52:04.3181163Z [36;1mgit config --local user.name "github-actions[bot]"[0m
+2025-05-02T14:52:04.3181620Z [36;1mgit config --local user.email "github-actions[bot]@users.noreply.github.com"[0m
+2025-05-02T14:52:04.3182016Z [36;1m[0m
+2025-05-02T14:52:04.3182261Z [36;1m# Fetch latest changes before adding our changes[0m
+2025-05-02T14:52:04.3182649Z [36;1mecho "Fetching latest changes from remote repository..."[0m
+2025-05-02T14:52:04.3182991Z [36;1mgit fetch origin[0m
+2025-05-02T14:52:04.3183202Z [36;1m[0m
+2025-05-02T14:52:04.3183393Z [36;1m# Add our changes[0m
+2025-05-02T14:52:04.3183640Z [36;1mgit add svg_files html_files[0m
+2025-05-02T14:52:04.3183892Z [36;1m[0m
+2025-05-02T14:52:04.3184103Z [36;1m# Only commit if there are changes[0m
+2025-05-02T14:52:04.3184394Z [36;1mif git diff --staged --quiet; then[0m
+2025-05-02T14:52:04.3184672Z [36;1m  echo "No changes to commit"[0m
+2025-05-02T14:52:04.3184982Z [36;1m  echo "changes_made=false" >> $GITHUB_OUTPUT[0m
+2025-05-02T14:52:04.3185319Z [36;1melse[0m
+2025-05-02T14:52:04.3185569Z [36;1m  git commit -m "Auto-converted draw.io files"[0m
+2025-05-02T14:52:04.3185853Z [36;1m  [0m
+2025-05-02T14:52:04.3186081Z [36;1m  # Pull the latest changes before pushing[0m
+2025-05-02T14:52:04.3186450Z [36;1m  echo "Pulling latest changes from remote repository..."[0m
+2025-05-02T14:52:04.3186833Z [36;1m  git pull --rebase origin ${GITHUB_REF#refs/heads/}[0m
+2025-05-02T14:52:04.3187135Z [36;1m  [0m
+2025-05-02T14:52:04.3187375Z [36;1m  # Use GitHub token for authentication and push[0m
+2025-05-02T14:52:04.3187718Z [36;1m  echo "Pushing changes to remote repository..."[0m
+2025-05-02T14:52:04.3188726Z [36;1m  git push "***github.com/lucasdreger/diagrams.git" HEAD:${GITHUB_REF#refs/heads/}[0m
+2025-05-02T14:52:04.3189185Z [36;1m  echo "changes_made=true" >> $GITHUB_OUTPUT[0m
+2025-05-02T14:52:04.3189485Z [36;1mfi[0m
+2025-05-02T14:52:04.3220194Z shell: /usr/bin/bash -e {0}
+2025-05-02T14:52:04.3220459Z ##[endgroup]
+2025-05-02T14:52:04.3302651Z Fetching latest changes from remote repository...
+2025-05-02T14:52:04.6931468Z No changes to commit
