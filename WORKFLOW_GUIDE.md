@@ -6,6 +6,15 @@ This document explains how our GitHub Actions workflow processes Draw.io files i
 
 The `drawio-convert.yml` workflow automatically converts `.drawio` files to SVG and HTML formats when changes are pushed to the repository. It also maintains a changelog of all diagram changes in `html_files/CHANGELOG.csv`.
 
+## Support for Files with Spaces
+
+This workflow fully supports filenames with spaces in them. You can create and modify files like:
+- `Marketing Plan 2025.drawio`  
+- `System Architecture - Version 2.drawio`
+- `Team Diagram - Q3 Review.drawio`
+
+All files with spaces are automatically detected and properly processed by the workflow.
+
 ## Key Features
 
 1. **Automatic Conversion**: Converts all modified `.drawio` files to SVG and HTML
@@ -16,29 +25,36 @@ The `drawio-convert.yml` workflow automatically converts `.drawio` files to SVG 
 
 ## How Filenames with Spaces are Handled
 
-Files with spaces in their names (e.g., "Untitled Diagram24.drawio") require special handling in shell scripts. Our workflow uses the following techniques:
+Files with spaces in their names (e.g., "System Architecture - Version 2.drawio") require special handling in shell scripts. Our workflow uses the following techniques:
 
 1. **Finding Files with Spaces**:
    ```bash
-   find . -name "*.drawio" -type f | grep " " | while read -r file_with_spaces; do
-     # Process each file with spaces in the name
-   done
+   find drawio_files -name "*.drawio" -type f | grep " " > /tmp/files_with_spaces.txt || true
    ```
 
-2. **File Path Storage**:
-   - We store paths in a temporary file to avoid space-splitting issues
-   - Each line in the file contains one complete path
+2. **Dedicated Processing Function**:
+   - All files are processed with a dedicated function that handles spaces properly:
+   ```bash
+   process_diagram_file() {
+     local file_to_process="$1"
+     # Processing logic that handles spaces correctly
+   }
+   ```
 
-3. **Reading Files with Proper Quoting**:
+3. **Line-by-Line File Reading**:
    ```bash
    while IFS= read -r changed_file || [ -n "$changed_file" ]; do
-     # Process the file with spaces preserved
+     process_diagram_file "$changed_file"
    done < /tmp/changed_files.txt
    ```
 
-4. **Direct Processing Fallback**:
-   - If standard processing fails, we perform direct processing of files with spaces
-   - This ensures even problematic files are converted
+4. **File Path Storage with Newlines as Separators**:
+   - We store paths in temporary files with one path per line
+   - This avoids issues with spaces in filenames that break word splitting
+
+5. **Proper Quoting Everywhere**:
+   - All variables are properly quoted when used in commands
+   - This preserves spaces in filenames throughout the workflow
 
 ## Workflow Process
 
