@@ -348,7 +348,7 @@ jobs:
               
               # Check if this is a new diagram or a modification
               # First try with git history, fallback to file existence check
-              if git ls-files --error-unmatch "svg_files/${base}.svg" &>/dev/null 2>/dev/null; then
+              if git ls-files --error-unmatch "svg_files/${base}.svg" &>/dev/null; then
                 CHANGE_TYPE="Modified"
               else
                 # Fallback to direct file check before our current conversion
@@ -762,3 +762,124 @@ jobs:
           CLIENT_SECRET: ${{ secrets.CLIENT_SECRET }}
           SITE_ID: ${{ secrets.SITE_ID }}
           DRIVE_ID: ${{ secrets.DRIVE_ID || 'auto' }}
+  
+  # Notifications for both success and failure
+  teams-notification:
+    needs: convert
+    runs-on: ubuntu-latest
+    if: ${{ always() }}  # Run this job whether the main job succeeds or fails
+    
+    steps:
+      # This step runs only on success
+      - name: Send Teams success notification
+        if: ${{ needs.convert.result == 'success' }}
+        run: |
+          # Create JSON payload for Teams webhook
+          PAYLOAD=$(cat << EOF
+          {
+            "@type": "MessageCard",
+            "@context": "https://schema.org/extensions",
+            "themeColor": "00FF00",
+            "summary": "Draw.io Conversion Workflow Succeeded",
+            "sections": [
+              {
+                "activityTitle": "✅ Draw.io Conversion Workflow Completed",
+                "activitySubtitle": "Diagrams were successfully processed",
+                "facts": [
+                  {
+                    "name": "Repository",
+                    "value": "${{ github.repository }}"
+                  },
+                  {
+                    "name": "Workflow",
+                    "value": "${{ github.workflow }}"
+                  },
+                  {
+                    "name": "Commit",
+                    "value": "${{ github.sha }}"
+                  },
+                  {
+                    "name": "Triggered by",
+                    "value": "${{ github.actor }}"
+                  }
+                ],
+                "markdown": true
+              }
+            ],
+            "potentialAction": [
+              {
+                "@type": "OpenUri",
+                "name": "View Workflow Run",
+                "targets": [
+                  {
+                    "os": "default",
+                    "uri": "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                  }
+                ]
+              }
+            ]
+          }
+          EOF
+          )
+          
+          # Send the payload to Teams webhook
+          curl -H "Content-Type: application/json" -d "$PAYLOAD" "${{ secrets.TEAMS_WEBHOOK_URL }}"
+
+      # This step runs only on failure
+      - name: Send Teams failure notification
+        if: ${{ needs.convert.result == 'failure' }}
+        run: |
+          # Create JSON payload for Teams webhook
+          PAYLOAD=$(cat << EOF
+          {
+            "@type": "MessageCard",
+            "@context": "https://schema.org/extensions",
+            "themeColor": "FF0000",
+            "summary": "Draw.io Conversion Workflow Failed",
+            "sections": [
+              {
+                "activityTitle": "❌ Draw.io Conversion Workflow Failed",
+                "activitySubtitle": "GitHub Actions workflow run failed",
+                "facts": [
+                  {
+                    "name": "Repository",
+                    "value": "${{ github.repository }}"
+                  },
+                  {
+                    "name": "Workflow",
+                    "value": "${{ github.workflow }}"
+                  },
+                  {
+                    "name": "Commit",
+                    "value": "${{ github.sha }}"
+                  },
+                  {
+                    "name": "Triggered by",
+                    "value": "${{ github.actor }}"
+                  },
+                  {
+                    "name": "Run ID",
+                    "value": "${{ github.run_id }}"
+                  }
+                ],
+                "markdown": true
+              }
+            ],
+            "potentialAction": [
+              {
+                "@type": "OpenUri",
+                "name": "View Workflow Run",
+                "targets": [
+                  {
+                    "os": "default",
+                    "uri": "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                  }
+                ]
+              }
+            ]
+          }
+          EOF
+          )
+          
+          # Send the payload to Teams webhook
+          curl -H "Content-Type: application/json" -d "$PAYLOAD" "${{ secrets.TEAMS_WEBHOOK_URL }}"

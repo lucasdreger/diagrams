@@ -34,6 +34,7 @@ The workflow processes only files that were changed in the current commit, inclu
 4. **SharePoint Integration**: Uploads the changelog to SharePoint for wider visibility
 5. **Special Handling for Filenames with Spaces**: Custom logic to ensure files with spaces are processed correctly
 6. **Change Tracking**: Uses git commit hashes to link each change to its specific commit
+7. **Microsoft Teams Notifications**: Sends notifications to a Teams channel on workflow success or failure
 
 ## How Filenames with Spaces are Handled
 
