@@ -523,25 +523,26 @@ jobs:
                     const extractedCols = parseCSV(row);
                     
                     // Ensure we have enough columns and handle missing values
-                    while (extractedCols.length < 8) {
+                    while (extractedCols.length < 9) {
                       extractedCols.push('');
                     }
                     
                     // For reference, original columns are:
-                    // [0]Date, [1]Time, [2]User, [3]Diagram, [4]Action, [5]File, [6]Commit Message, [7]Version
+                    // [0]Date, [1]Time, [2]User, [3]Diagram, [4]Action, [5]File, [6]Commit Message, [7]Version, [8]Commit Hash
                     
                     // New format:
-                    // [0]Date, [1]Time, [2]Diagram, [3]Action, [4]File, [5]Commit Message, [6]Version, [7]SharePoint Upload Date
+                    // [0]Date, [1]Time, [2]Diagram, [3]Action, [4]File, [5]Commit Message, [6]Version, [7]Commit Hash, [8]SharePoint Upload Date
                     
                     // Create a properly formatted CSV row with quotes around each field
                     const formattedRow = [
                       extractedCols[0],                      // Date
                       extractedCols[1],                      // Time
-                      `"${extractedCols[3].replace(/"/g, '""')}"`,  // Diagram
-                      `"${extractedCols[4].replace(/"/g, '""')}"`,  // Action
-                      `"${extractedCols[5].replace(/"/g, '""')}"`,  // File
-                      `"${extractedCols[6].replace(/"/g, '""')}"`,  // Commit Message
-                      extractedCols[7],                      // Version
+                      `"${(extractedCols[3] || '').replace(/"/g, '""')}"`,  // Diagram
+                      `"${(extractedCols[4] || '').replace(/"/g, '""')}"`,  // Action
+                      `"${(extractedCols[5] || '').replace(/"/g, '""')}"`,  // File
+                      `"${(extractedCols[6] || '').replace(/"/g, '""')}"`,  // Commit Message
+                      extractedCols[7] || '',                // Version
+                      extractedCols[8] || '',                // Commit Hash
                       today                                  // SharePoint Upload Date
                     ].join(',');
                     

@@ -85,7 +85,7 @@ Files with spaces in their names (e.g., "System Architecture - Version 2.drawio"
 
 ## Commit Hash Tracking
 
-Each changelog entry includes a short commit hash for tracking purposes. The commit hash is stored in the "Commit Hash" column of the CHANGELOG.csv file and is also preserved when uploading to SharePoint.
+Each changelog entry includes a short commit hash for tracking purposes. The commit hash is stored in the "Commit Hash" column (column 8) of the CHANGELOG.csv file and is also preserved when uploading to SharePoint. This allows for easy tracking of which commit introduced each change to a diagram file.
 
 ### Using Commit Hashes
 
