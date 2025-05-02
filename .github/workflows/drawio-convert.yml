@@ -150,28 +150,35 @@ jobs:
           NEWLY_ADDED_FILES=$(git diff --name-status HEAD^ HEAD 2>/dev/null | grep "^A" | grep -E "\.drawio$" | awk '{print $2}' || echo "")
           echo "Newly added .drawio files: $NEWLY_ADDED_FILES"
           
-          # Explicitly check for Untitled Diagram24.drawio
+          # Explicitly check for Untitled Diagram24.drawio and add it directly to the file list
           if [ -f "drawio_files/Untitled Diagram24.drawio" ]; then
             echo "Untitled Diagram24.drawio exists in drawio_files directory"
-            # Force-add it to the list if it exists but wasn't caught by other methods
-            if ! echo "$CHANGED_FILES $NEW_FILES $NEWLY_ADDED_FILES" | grep -q "Untitled Diagram24.drawio"; then
-              echo "Adding Untitled Diagram24.drawio to the processing list"
-              NEWLY_ADDED_FILES="$NEWLY_ADDED_FILES drawio_files/Untitled Diagram24.drawio"
-            fi
+            # Add it directly to our file list for processing
+            echo "drawio_files/Untitled Diagram24.drawio" >> /tmp/changed_files.txt
+            echo "Added Untitled Diagram24.drawio to the processing list"
           else
             echo "Untitled Diagram24.drawio does NOT exist in drawio_files directory"
           fi
           
           # Combine all file lists, avoiding duplicates
           ALL_FILES="$CHANGED_FILES $NEW_FILES $NEWLY_ADDED_FILES"
-          # Remove duplicates while preserving order
-          CHANGED_FILES=$(echo "$ALL_FILES" | tr ' ' '\n' | awk '!seen[$0]++' | tr '\n' ' ')
           
-          echo "Files changed/added in this commit: $CHANGED_FILES"
+          # Use a temporary file to store filenames to avoid space issues
+          rm -f /tmp/changed_files.txt
+          echo "$ALL_FILES" | tr ' ' '\n' | awk '!seen[$0]++' > /tmp/changed_files.txt
+          echo "Files to process:"
+          cat /tmp/changed_files.txt
           
-          # Only process the .drawio files that were changed in this commit
-          # This preserves all other SVG/HTML files unchanged
-          for changed_file in $CHANGED_FILES; do
+          # Special handling for Untitled Diagram24.drawio
+          if [ ! -f "/tmp/changed_files.txt" ] || [ ! -s "/tmp/changed_files.txt" ]; then
+            echo "No files detected for processing. Adding Untitled Diagram24.drawio manually."
+            if [ -f "drawio_files/Untitled Diagram24.drawio" ]; then
+              echo "drawio_files/Untitled Diagram24.drawio" > /tmp/changed_files.txt
+            fi
+          fi
+          
+          # Process each file, handling spaces correctly by using a file to store paths
+          while IFS= read -r changed_file || [ -n "$changed_file" ]; do
             # Skip if file doesn't exist (e.g. it was deleted)
             if [ ! -f "$changed_file" ]; then
               echo "File $changed_file no longer exists, skipping."

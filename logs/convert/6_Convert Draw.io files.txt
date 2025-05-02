@@ -1,0 +1,315 @@
+﻿2025-05-02T14:14:51.2073019Z ##[group]Run # Set up virtual display for headless operation with better configuration
+2025-05-02T14:14:51.2075244Z [36;1m# Set up virtual display for headless operation with better configuration[0m
+2025-05-02T14:14:51.2075706Z [36;1mecho "Starting Xvfb with improved settings..."[0m
+2025-05-02T14:14:51.2076075Z [36;1mXvfb :99 -screen 0 1920x1080x24 -ac +extension RANDR &[0m
+2025-05-02T14:14:51.2076608Z [36;1mexport DISPLAY=:99[0m
+2025-05-02T14:14:51.2076874Z [36;1msleep 2 # Give Xvfb more time to start[0m
+2025-05-02T14:14:51.2077136Z [36;1m[0m
+2025-05-02T14:14:51.2077332Z [36;1m# Check if Xvfb started successfully[0m
+2025-05-02T14:14:51.2077643Z [36;1mif ! xdpyinfo -display :99 >/dev/null 2>&1; then[0m
+2025-05-02T14:14:51.2078075Z [36;1m  echo "ERROR: Xvfb failed to start properly. Trying alternate configuration..."[0m
+2025-05-02T14:14:51.2078471Z [36;1m  # Try an alternate configuration[0m
+2025-05-02T14:14:51.2078759Z [36;1m  killall Xvfb 2>/dev/null || true[0m
+2025-05-02T14:14:51.2079091Z [36;1m  Xvfb :99 -screen 0 1024x768x16 -nolisten tcp &[0m
+2025-05-02T14:14:51.2079370Z [36;1m  export DISPLAY=:99[0m
+2025-05-02T14:14:51.2079599Z [36;1m  sleep 3[0m
+2025-05-02T14:14:51.2079787Z [36;1mfi[0m
+2025-05-02T14:14:51.2079953Z [36;1m[0m
+2025-05-02T14:14:51.2080133Z [36;1mecho "Xvfb process info:"[0m
+2025-05-02T14:14:51.2080378Z [36;1mps aux | grep Xvfb[0m
+2025-05-02T14:14:51.2080584Z [36;1m[0m
+2025-05-02T14:14:51.2080794Z [36;1m# Use a different approach - temporary script[0m
+2025-05-02T14:14:51.2081101Z [36;1mcat > /tmp/convert-drawio.sh << 'EOL'[0m
+2025-05-02T14:14:51.2081353Z [36;1m#!/bin/bash[0m
+2025-05-02T14:14:51.2081550Z [36;1minput_file=$1[0m
+2025-05-02T14:14:51.2081752Z [36;1moutput_file=$2[0m
+2025-05-02T14:14:51.2082208Z [36;1mdrawio -x -f svg -o "$output_file" "$input_file"[0m
+2025-05-02T14:14:51.2082495Z [36;1mEOL[0m
+2025-05-02T14:14:51.2082693Z [36;1mchmod +x /tmp/convert-drawio.sh[0m
+2025-05-02T14:14:51.2082922Z [36;1m[0m
+2025-05-02T14:14:51.2083125Z [36;1m# Set debug output to help troubleshoot[0m
+2025-05-02T14:14:51.2083408Z [36;1mecho "Current directory: $(pwd)"[0m
+2025-05-02T14:14:51.2083687Z [36;1mecho "Listing drawio_files directory:"[0m
+2025-05-02T14:14:51.2084032Z [36;1mls -la drawio_files || echo "drawio_files directory not found"[0m
+2025-05-02T14:14:51.2084349Z [36;1m[0m
+2025-05-02T14:14:51.2084601Z [36;1m# Get the list of changed .drawio files in the current commit[0m
+2025-05-02T14:14:51.2084990Z [36;1mecho "Looking for changed .drawio files in this commit..."[0m
+2025-05-02T14:14:51.2085465Z [36;1mCHANGED_FILES=$(git diff --name-only HEAD^ HEAD 2>/dev/null | grep -E "\.drawio$" || echo "")[0m
+2025-05-02T14:14:51.2085868Z [36;1m[0m
+2025-05-02T14:14:51.2086106Z [36;1m# If HEAD^ fails (first commit), try against empty tree[0m
+2025-05-02T14:14:51.2086636Z [36;1mif [ -z "$CHANGED_FILES" ]; then[0m
+2025-05-02T14:14:51.2086961Z [36;1m  echo "No changes found with first method, trying diff-tree..."[0m
+2025-05-02T14:14:51.2087494Z [36;1m  CHANGED_FILES=$(git diff-tree --name-only --no-commit-id --root -r HEAD | grep -E "\.drawio$" || echo "")[0m
+2025-05-02T14:14:51.2087924Z [36;1mfi[0m
+2025-05-02T14:14:51.2088091Z [36;1m[0m
+2025-05-02T14:14:51.2088334Z [36;1m# For newly added files, we need to check the status differently[0m
+2025-05-02T14:14:51.2088719Z [36;1m# This will find new (untracked) and newly added files[0m
+2025-05-02T14:14:51.2089052Z [36;1mecho "Looking for untracked .drawio files..."[0m
+2025-05-02T14:14:51.2089491Z [36;1mNEW_FILES=$(git ls-files --others --exclude-standard | grep -E "\.drawio$" || echo "")[0m
+2025-05-02T14:14:51.2089942Z [36;1mecho "Untracked .drawio files: $NEW_FILES"[0m
+2025-05-02T14:14:51.2090200Z [36;1m[0m
+2025-05-02T14:14:51.2090459Z [36;1mecho "Looking for newly added .drawio files in this commit..."[0m
+2025-05-02T14:14:51.2090975Z [36;1mgit diff --name-status HEAD^ HEAD 2>/dev/null | grep "^A" || echo "No newly added files found in git diff"[0m
+2025-05-02T14:14:51.2091625Z [36;1mNEWLY_ADDED_FILES=$(git diff --name-status HEAD^ HEAD 2>/dev/null | grep "^A" | grep -E "\.drawio$" | awk '{print $2}' || echo "")[0m
+2025-05-02T14:14:51.2092349Z [36;1mecho "Newly added .drawio files: $NEWLY_ADDED_FILES"[0m
+2025-05-02T14:14:51.2092640Z [36;1m[0m
+2025-05-02T14:14:51.2092860Z [36;1m# Explicitly check for Untitled Diagram24.drawio[0m
+2025-05-02T14:14:51.2093213Z [36;1mif [ -f "drawio_files/Untitled Diagram24.drawio" ]; then[0m
+2025-05-02T14:14:51.2093614Z [36;1m  echo "Untitled Diagram24.drawio exists in drawio_files directory"[0m
+2025-05-02T14:14:51.2094063Z [36;1m  # Force-add it to the list if it exists but wasn't caught by other methods[0m
+2025-05-02T14:14:51.2094581Z [36;1m  if ! echo "$CHANGED_FILES $NEW_FILES $NEWLY_ADDED_FILES" | grep -q "Untitled Diagram24.drawio"; then[0m
+2025-05-02T14:14:51.2095086Z [36;1m    echo "Adding Untitled Diagram24.drawio to the processing list"[0m
+2025-05-02T14:14:51.2095530Z [36;1m    NEWLY_ADDED_FILES="$NEWLY_ADDED_FILES drawio_files/Untitled Diagram24.drawio"[0m
+2025-05-02T14:14:51.2095892Z [36;1m  fi[0m
+2025-05-02T14:14:51.2096060Z [36;1melse[0m
+2025-05-02T14:14:51.2096550Z [36;1m  echo "Untitled Diagram24.drawio does NOT exist in drawio_files directory"[0m
+2025-05-02T14:14:51.2096906Z [36;1mfi[0m
+2025-05-02T14:14:51.2097070Z [36;1m[0m
+2025-05-02T14:14:51.2097276Z [36;1m# Combine all file lists, avoiding duplicates[0m
+2025-05-02T14:14:51.2097612Z [36;1mALL_FILES="$CHANGED_FILES $NEW_FILES $NEWLY_ADDED_FILES"[0m
+2025-05-02T14:14:51.2097955Z [36;1m# Remove duplicates while preserving order[0m
+2025-05-02T14:14:51.2098324Z [36;1mCHANGED_FILES=$(echo "$ALL_FILES" | tr ' ' '\n' | awk '!seen[$0]++' | tr '\n' ' ')[0m
+2025-05-02T14:14:51.2098792Z [36;1m[0m
+2025-05-02T14:14:51.2099036Z [36;1mecho "Files changed/added in this commit: $CHANGED_FILES"[0m
+2025-05-02T14:14:51.2099333Z [36;1m[0m
+2025-05-02T14:14:51.2099585Z [36;1m# Only process the .drawio files that were changed in this commit[0m
+2025-05-02T14:14:51.2099972Z [36;1m# This preserves all other SVG/HTML files unchanged[0m
+2025-05-02T14:14:51.2100290Z [36;1mfor changed_file in $CHANGED_FILES; do[0m
+2025-05-02T14:14:51.2100596Z [36;1m  # Skip if file doesn't exist (e.g. it was deleted)[0m
+2025-05-02T14:14:51.2100886Z [36;1m  if [ ! -f "$changed_file" ]; then[0m
+2025-05-02T14:14:51.2101194Z [36;1m    echo "File $changed_file no longer exists, skipping."[0m
+2025-05-02T14:14:51.2101486Z [36;1m    continue[0m
+2025-05-02T14:14:51.2101673Z [36;1m  fi[0m
+2025-05-02T14:14:51.2101840Z [36;1m  [0m
+2025-05-02T14:14:51.2102092Z [36;1m  # Get the base filename without extension, preserving spaces[0m
+2025-05-02T14:14:51.2102438Z [36;1m  base=$(basename "$changed_file" .drawio)[0m
+2025-05-02T14:14:51.2102720Z [36;1m  rel_path="$changed_file"[0m
+2025-05-02T14:14:51.2102992Z [36;1m  echo "Processing changed file: $changed_file"[0m
+2025-05-02T14:14:51.2103256Z [36;1m  [0m
+2025-05-02T14:14:51.2103466Z [36;1m  # Flag this as a changed file for changelog[0m
+2025-05-02T14:14:51.2103737Z [36;1m  FILE_CHANGED=true[0m
+2025-05-02T14:14:51.2103937Z [36;1m[0m
+2025-05-02T14:14:51.2104113Z [36;1m  mkdir -p "svg_files"[0m
+2025-05-02T14:14:51.2104364Z [36;1m  output_path="svg_files/${base}.svg"[0m
+2025-05-02T14:14:51.2104604Z [36;1m  [0m
+2025-05-02T14:14:51.2104804Z [36;1m  echo "Converting $changed_file to SVG..."[0m
+2025-05-02T14:14:51.2105194Z [36;1m  # Run the conversion with xvfb-run - quote variables to handle spaces properly[0m
+2025-05-02T14:14:51.2105589Z [36;1m  echo "Using primary conversion method..."[0m
+2025-05-02T14:14:51.2105962Z [36;1m  xvfb-run -a /tmp/convert-drawio.sh "$changed_file" "$output_path"[0m
+2025-05-02T14:14:51.2106434Z [36;1m  [0m
+2025-05-02T14:14:51.2106634Z [36;1m  # Check if conversion succeeded[0m
+2025-05-02T14:14:51.2106899Z [36;1m  if [ ! -f "$output_path" ]; then[0m
+2025-05-02T14:14:51.2107265Z [36;1m    echo "Failed to convert $changed_file to SVG. Trying alternative method..."[0m
+2025-05-02T14:14:51.2107729Z [36;1m    # Alternative approach using node directly if installed with drawio[0m
+2025-05-02T14:14:51.2108286Z [36;1m    xvfb-run -a drawio -x -f svg -o "$output_path" "$changed_file"[0m
+2025-05-02T14:14:51.2108595Z [36;1m    [0m
+2025-05-02T14:14:51.2108817Z [36;1m    # If still failed, show more detailed error info[0m
+2025-05-02T14:14:51.2109108Z [36;1m    if [ ! -f "$output_path" ]; then[0m
+2025-05-02T14:14:51.2109443Z [36;1m      echo "ERROR: Both conversion methods failed for $changed_file"[0m
+2025-05-02T14:14:51.2109767Z [36;1m      echo "File info:"[0m
+2025-05-02T14:14:51.2110002Z [36;1m      ls -la "$changed_file"[0m
+2025-05-02T14:14:51.2110272Z [36;1m      echo "Content preview (first 100 bytes):"[0m
+2025-05-02T14:14:51.2110575Z [36;1m      head -c 100 "$changed_file" | hexdump -C[0m
+2025-05-02T14:14:51.2110823Z [36;1m    else[0m
+2025-05-02T14:14:51.2111104Z [36;1m      echo "Alternative conversion method succeeded for $changed_file"[0m
+2025-05-02T14:14:51.2111426Z [36;1m    fi[0m
+2025-05-02T14:14:51.2111603Z [36;1m  else[0m
+2025-05-02T14:14:51.2111834Z [36;1m    echo "Successfully converted $changed_file to SVG"[0m
+2025-05-02T14:14:51.2112111Z [36;1m  fi[0m
+2025-05-02T14:14:51.2112275Z [36;1m[0m
+2025-05-02T14:14:51.2112454Z [36;1m  # Create an HTML wrapper[0m
+2025-05-02T14:14:51.2112728Z [36;1m  echo '<!DOCTYPE html>' > "html_files/${base}.html"[0m
+2025-05-02T14:14:51.2113056Z [36;1m  echo '<html lang="en">' >> "html_files/${base}.html"[0m
+2025-05-02T14:14:51.2113369Z [36;1m  echo '<head>' >> "html_files/${base}.html"[0m
+2025-05-02T14:14:51.2113696Z [36;1m  echo '  <meta charset="UTF-8">' >> "html_files/${base}.html"[0m
+2025-05-02T14:14:51.2114055Z [36;1m  echo "  <title>${base}</title>" >> "html_files/${base}.html"[0m
+2025-05-02T14:14:51.2114526Z [36;1m  echo '  <style>' >> "html_files/${base}.html"[0m
+2025-05-02T14:14:51.2114884Z [36;1m  echo '    body { margin: 0; padding: 0; }' >> "html_files/${base}.html"[0m
+2025-05-02T14:14:51.2115458Z [36;1m  echo '    svg { max-width: 100%; height: ***; display: block; }' >> "html_files/${base}.html"[0m
+2025-05-02T14:14:51.2115880Z [36;1m  echo '  </style>' >> "html_files/${base}.html"[0m
+2025-05-02T14:14:51.2116183Z [36;1m  echo '</head>' >> "html_files/${base}.html"[0m
+2025-05-02T14:14:51.2116649Z [36;1m  echo '<body>' >> "html_files/${base}.html"[0m
+2025-05-02T14:14:51.2116906Z [36;1m[0m
+2025-05-02T14:14:51.2117134Z [36;1m  cat "svg_files/${base}.svg" >> "html_files/${base}.html"[0m
+2025-05-02T14:14:51.2117415Z [36;1m[0m
+2025-05-02T14:14:51.2117613Z [36;1m  echo '</body>' >> "html_files/${base}.html"[0m
+2025-05-02T14:14:51.2118060Z [36;1m  echo '</html>' >> "html_files/${base}.html"              # Only log the changes if this file was modified in this commit[0m
+2025-05-02T14:14:51.2118517Z [36;1m  if [ "$FILE_CHANGED" = true ]; then[0m
+2025-05-02T14:14:51.2118867Z [36;1m    # Log the changes in CSV format with date as dd.mm.yyyy and full name[0m
+2025-05-02T14:14:51.2119354Z [36;1m    # Get the full name of the author (or committer) of the latest commit that modified this file[0m
+2025-05-02T14:14:51.2119854Z [36;1m    AUTHOR=$(git log -1 --format="%aN" -- "$changed_file" || echo "lucasdreger")[0m
+2025-05-02T14:14:51.2120242Z [36;1m    # Get the commit message for this file's change[0m
+2025-05-02T14:14:51.2120636Z [36;1m    COMMIT_MSG=$(git log -1 --format="%s" -- "$changed_file" || echo "No commit message")[0m
+2025-05-02T14:14:51.2121058Z [36;1m    # Escape any quotes in the commit message for CSV format[0m
+2025-05-02T14:14:51.2121406Z [36;1m    COMMIT_MSG=$(echo "$COMMIT_MSG" | sed 's/"/""/g')[0m
+2025-05-02T14:14:51.2121709Z [36;1m    FORMATTED_DATE=$(date +"%d.%m.%Y")[0m
+2025-05-02T14:14:51.2121977Z [36;1m    FORMATTED_TIME=$(date +"%H:%M:%S")[0m
+2025-05-02T14:14:51.2122220Z [36;1m    [0m
+2025-05-02T14:14:51.2122450Z [36;1m    # Check if this is a new diagram or a modification[0m
+2025-05-02T14:14:51.2122821Z [36;1m    # First check if this is a newly added file in the current commit[0m
+2025-05-02T14:14:51.2123431Z [36;1m    if git diff --name-status HEAD^ HEAD 2>/dev/null | grep "^A" | grep -q "$changed_file"; then[0m
+2025-05-02T14:14:51.2123910Z [36;1m      echo "Detected newly added file in this commit: $changed_file"[0m
+2025-05-02T14:14:51.2124240Z [36;1m      CHANGE_TYPE="New"[0m
+2025-05-02T14:14:51.2124524Z [36;1m    # Then check if the file is untracked (completely new)[0m
+2025-05-02T14:14:51.2124954Z [36;1m    elif git ls-files --others --exclude-standard | grep -q "$changed_file"; then[0m
+2025-05-02T14:14:51.2125394Z [36;1m      echo "Detected untracked new file: $changed_file"[0m
+2025-05-02T14:14:51.2125693Z [36;1m      CHANGE_TYPE="New" [0m
+2025-05-02T14:14:51.2126015Z [36;1m    # Check if SVG already exists (meaning it's been processed before)[0m
+2025-05-02T14:14:51.2126691Z [36;1m    elif git ls-files --error-unmatch "svg_files/${base}.svg" &>/dev/null 2>/dev/null; then[0m
+2025-05-02T14:14:51.2127100Z [36;1m      CHANGE_TYPE="Modified"[0m
+2025-05-02T14:14:51.2127426Z [36;1m    # Fallback to direct file check before our current conversion[0m
+2025-05-02T14:14:51.2127804Z [36;1m    elif [ -f "svg_files/${base}.svg" ]; then[0m
+2025-05-02T14:14:51.2128082Z [36;1m      CHANGE_TYPE="Modified"[0m
+2025-05-02T14:14:51.2128306Z [36;1m    else[0m
+2025-05-02T14:14:51.2128500Z [36;1m      CHANGE_TYPE="New"[0m
+2025-05-02T14:14:51.2128714Z [36;1m    fi[0m
+2025-05-02T14:14:51.2128886Z [36;1m    [0m
+2025-05-02T14:14:51.2129151Z [36;1m    echo "Change type determined for $changed_file: $CHANGE_TYPE"[0m
+2025-05-02T14:14:51.2129462Z [36;1m    [0m
+2025-05-02T14:14:51.2129667Z [36;1m    # Make sure changelog directory exists[0m
+2025-05-02T14:14:51.2129947Z [36;1m    mkdir -p svg_files html_files[0m
+2025-05-02T14:14:51.2130315Z [36;1m    [0m
+2025-05-02T14:14:51.2130543Z [36;1m    # Make debug output to understand what's happening[0m
+2025-05-02T14:14:51.2130918Z [36;1m    echo "Creating changelog entries for: $base (${CHANGE_TYPE})"[0m
+2025-05-02T14:14:51.2131234Z [36;1m    [0m
+2025-05-02T14:14:51.2131553Z [36;1m    # Get enhanced version information using semantic versioning light (MAJOR.MINOR)[0m
+2025-05-02T14:14:51.2132021Z [36;1m    # Use git history to determine if this is a major or minor change[0m
+2025-05-02T14:14:51.2132469Z [36;1m    # Start with the commit message - if it contains keywords, categorize the change[0m
+2025-05-02T14:14:51.2132964Z [36;1m    MAJOR_KEYWORDS="redesign|new version|complete|refactor|overhaul|major|added"[0m
+2025-05-02T14:14:51.2133439Z [36;1m    MINOR_UPDATE_KEYWORDS="update|fix|adjust|tweak|enhance|improve|minor"[0m
+2025-05-02T14:14:51.2133773Z [36;1m    [0m
+2025-05-02T14:14:51.2134029Z [36;1m    # Default to standard minor change (increment minor version)[0m
+2025-05-02T14:14:51.2134357Z [36;1m    IS_MAJOR_CHANGE=0[0m
+2025-05-02T14:14:51.2134597Z [36;1m    CHANGE_DESCRIPTION="Change"[0m
+2025-05-02T14:14:51.2134830Z [36;1m    [0m
+2025-05-02T14:14:51.2135108Z [36;1m    # Check commit message for major change keywords (case insensitive)[0m
+2025-05-02T14:14:51.2135548Z [36;1m    if echo "$COMMIT_MSG" | grep -iE "$MAJOR_KEYWORDS" > /dev/null; then[0m
+2025-05-02T14:14:51.2135884Z [36;1m      IS_MAJOR_CHANGE=1[0m
+2025-05-02T14:14:51.2136141Z [36;1m      CHANGE_DESCRIPTION="Major Change"[0m
+2025-05-02T14:14:51.2136658Z [36;1m      echo "Detected major change based on commit message keywords"[0m
+2025-05-02T14:14:51.2137046Z [36;1m    # Check for minor update keywords (case insensitive)[0m
+2025-05-02T14:14:51.2137452Z [36;1m    elif echo "$COMMIT_MSG" | grep -iE "$MINOR_UPDATE_KEYWORDS" > /dev/null; then[0m
+2025-05-02T14:14:51.2137817Z [36;1m      CHANGE_DESCRIPTION="Update"[0m
+2025-05-02T14:14:51.2138137Z [36;1m      echo "Detected update based on commit message keywords"[0m
+2025-05-02T14:14:51.2138439Z [36;1m    fi[0m
+2025-05-02T14:14:51.2138612Z [36;1m    [0m
+2025-05-02T14:14:51.2138922Z [36;1m    # Get current minor and major versions from git history using the correct variable[0m
+2025-05-02T14:14:51.2139554Z [36;1m    MINOR_VERSION=$(git log --follow --oneline -- "$changed_file" | wc -l | tr -d ' ')[0m
+2025-05-02T14:14:51.2139917Z [36;1m    MAJOR_VERSION=1[0m
+2025-05-02T14:14:51.2140122Z [36;1m    [0m
+2025-05-02T14:14:51.2140396Z [36;1m    # Check if file exists in previous commits to determine major version[0m
+2025-05-02T14:14:51.2140840Z [36;1m    PREV_VERSIONS=$(git log --follow --pretty=format:"%H" -- "$changed_file")[0m
+2025-05-02T14:14:51.2141199Z [36;1m    if [ -n "$PREV_VERSIONS" ]; then[0m
+2025-05-02T14:14:51.2141527Z [36;1m      # Count the number of commits containing major change keywords[0m
+2025-05-02T14:14:51.2142077Z [36;1m      MAJOR_VERSION=$(git log --follow --pretty=format:"%s" -- "$changed_file" | grep -iE "$MAJOR_KEYWORDS" | wc -l | tr -d ' ')[0m
+2025-05-02T14:14:51.2142577Z [36;1m      # Add 1 because we start at version 1.0[0m
+2025-05-02T14:14:51.2142864Z [36;1m      MAJOR_VERSION=$((MAJOR_VERSION + 1))[0m
+2025-05-02T14:14:51.2143112Z [36;1m    fi[0m
+2025-05-02T14:14:51.2143282Z [36;1m    [0m
+2025-05-02T14:14:51.2143495Z [36;1m    # Handle new diagrams - they start at 1.0[0m
+2025-05-02T14:14:51.2143783Z [36;1m    if [ "$CHANGE_TYPE" = "New" ]; then[0m
+2025-05-02T14:14:51.2144038Z [36;1m      VERSION="1.0"[0m
+2025-05-02T14:14:51.2144243Z [36;1m    else[0m
+2025-05-02T14:14:51.2144479Z [36;1m      # For modifications, use the major.minor scheme[0m
+2025-05-02T14:14:51.2144793Z [36;1m      if [ "$IS_MAJOR_CHANGE" -eq 1 ]; then[0m
+2025-05-02T14:14:51.2145121Z [36;1m        # Major change, increment major version, reset minor to 0[0m
+2025-05-02T14:14:51.2145441Z [36;1m        VERSION="${MAJOR_VERSION}.0"[0m
+2025-05-02T14:14:51.2145687Z [36;1m      else[0m
+2025-05-02T14:14:51.2146058Z [36;1m        # Minor change, keep major version, increment minor[0m
+2025-05-02T14:14:51.2146569Z [36;1m        VERSION="${MAJOR_VERSION}.$((MINOR_VERSION - 1))"[0m
+2025-05-02T14:14:51.2146849Z [36;1m      fi[0m
+2025-05-02T14:14:51.2147021Z [36;1m    fi[0m
+2025-05-02T14:14:51.2147195Z [36;1m    [0m
+2025-05-02T14:14:51.2147505Z [36;1m    # Simplified action description: New for new files, Update for modifications[0m
+2025-05-02T14:14:51.2147894Z [36;1m    if [ "$CHANGE_TYPE" = "New" ]; then[0m
+2025-05-02T14:14:51.2148150Z [36;1m      ACTION_DESC="New"[0m
+2025-05-02T14:14:51.2148366Z [36;1m    else[0m
+2025-05-02T14:14:51.2148568Z [36;1m      ACTION_DESC="Modified (Update)"[0m
+2025-05-02T14:14:51.2148825Z [36;1m    fi[0m
+2025-05-02T14:14:51.2149004Z [36;1m    [0m
+2025-05-02T14:14:51.2149216Z [36;1m    # Get the commit hash for this file's change[0m
+2025-05-02T14:14:51.2149574Z [36;1m    COMMIT_HASH=$(git log -1 --pretty=format:"%H" -- "$changed_file")[0m
+2025-05-02T14:14:51.2149977Z [36;1m    SHORT_HASH=$(git log -1 --pretty=format:"%h" -- "$changed_file")[0m
+2025-05-02T14:14:51.2150283Z [36;1m    [0m
+2025-05-02T14:14:51.2150539Z [36;1m    # Write only to html_files changelog with commit hash column[0m
+2025-05-02T14:14:51.2150976Z [36;1m    # Date, Time, User, Diagram, Action, File, Commit Message, Version, Commit Hash[0m
+2025-05-02T14:14:51.2151415Z [36;1m    # Properly escape all fields to ensure CSV format integrity[0m
+2025-05-02T14:14:51.2152094Z [36;1m    echo "$FORMATTED_DATE,$FORMATTED_TIME,\"$AUTHOR\",\"${base}\",\"$ACTION_DESC\",\"${base}.drawio to ${base}.html\",\"$COMMIT_MSG\",\"$VERSION\",\"$SHORT_HASH\"" >> html_files/CHANGELOG.csv[0m
+2025-05-02T14:14:51.2152834Z [36;1m    echo "Added entry to changelog for $changed_file ($ACTION_DESC) with commit $SHORT_HASH"[0m
+2025-05-02T14:14:51.2153216Z [36;1m  fi[0m
+2025-05-02T14:14:51.2153379Z [36;1mdone[0m
+2025-05-02T14:14:51.2182383Z shell: /usr/bin/bash -e {0}
+2025-05-02T14:14:51.2182631Z ##[endgroup]
+2025-05-02T14:14:51.2238692Z Starting Xvfb with improved settings...
+2025-05-02T14:14:51.4521592Z The XKEYBOARD keymap compiler (xkbcomp) reports:
+2025-05-02T14:14:51.4522315Z > Warning:          Could not resolve keysym XF86CameraAccessEnable
+2025-05-02T14:14:51.4523320Z > Warning:          Could not resolve keysym XF86CameraAccessDisable
+2025-05-02T14:14:51.4523981Z > Warning:          Could not resolve keysym XF86CameraAccessToggle
+2025-05-02T14:14:51.4524620Z > Warning:          Could not resolve keysym XF86NextElement
+2025-05-02T14:14:51.4525240Z > Warning:          Could not resolve keysym XF86PreviousElement
+2025-05-02T14:14:51.4525933Z > Warning:          Could not resolve keysym XF86AutopilotEngageToggle
+2025-05-02T14:14:51.4526797Z > Warning:          Could not resolve keysym XF86MarkWaypoint
+2025-05-02T14:14:51.4527362Z > Warning:          Could not resolve keysym XF86Sos
+2025-05-02T14:14:51.4527714Z > Warning:          Could not resolve keysym XF86NavChart
+2025-05-02T14:14:51.4528083Z > Warning:          Could not resolve keysym XF86FishingChart
+2025-05-02T14:14:51.4528432Z > Warning:          Could not resolve keysym XF86SingleRangeRadar
+2025-05-02T14:14:51.4528789Z > Warning:          Could not resolve keysym XF86DualRangeRadar
+2025-05-02T14:14:51.4529129Z > Warning:          Could not resolve keysym XF86RadarOverlay
+2025-05-02T14:14:51.4529476Z > Warning:          Could not resolve keysym XF86TraditionalSonar
+2025-05-02T14:14:51.4529814Z > Warning:          Could not resolve keysym XF86ClearvuSonar
+2025-05-02T14:14:51.4530282Z > Warning:          Could not resolve keysym XF86SidevuSonar
+2025-05-02T14:14:51.4530819Z > Warning:          Could not resolve keysym XF86NavInfo
+2025-05-02T14:14:51.4531256Z Errors from xkbcomp are not fatal to the X server
+2025-05-02T14:14:53.2264801Z ERROR: Xvfb failed to start properly. Trying alternate configuration...
+2025-05-02T14:14:53.2641986Z The XKEYBOARD keymap compiler (xkbcomp) reports:
+2025-05-02T14:14:53.2642484Z > Warning:          Could not resolve keysym XF86CameraAccessEnable
+2025-05-02T14:14:53.2643179Z > Warning:          Could not resolve keysym XF86CameraAccessDisable
+2025-05-02T14:14:53.2643589Z > Warning:          Could not resolve keysym XF86CameraAccessToggle
+2025-05-02T14:14:53.2643980Z > Warning:          Could not resolve keysym XF86NextElement
+2025-05-02T14:14:53.2644376Z > Warning:          Could not resolve keysym XF86PreviousElement
+2025-05-02T14:14:53.2644791Z > Warning:          Could not resolve keysym XF86AutopilotEngageToggle
+2025-05-02T14:14:53.2645196Z > Warning:          Could not resolve keysym XF86MarkWaypoint
+2025-05-02T14:14:53.2645557Z > Warning:          Could not resolve keysym XF86Sos
+2025-05-02T14:14:53.2645904Z > Warning:          Could not resolve keysym XF86NavChart
+2025-05-02T14:14:53.2646514Z > Warning:          Could not resolve keysym XF86FishingChart
+2025-05-02T14:14:53.2646951Z > Warning:          Could not resolve keysym XF86SingleRangeRadar
+2025-05-02T14:14:53.2647350Z > Warning:          Could not resolve keysym XF86DualRangeRadar
+2025-05-02T14:14:53.2647736Z > Warning:          Could not resolve keysym XF86RadarOverlay
+2025-05-02T14:14:53.2648128Z > Warning:          Could not resolve keysym XF86TraditionalSonar
+2025-05-02T14:14:53.2648510Z > Warning:          Could not resolve keysym XF86ClearvuSonar
+2025-05-02T14:14:53.2648883Z > Warning:          Could not resolve keysym XF86SidevuSonar
+2025-05-02T14:14:53.2649242Z > Warning:          Could not resolve keysym XF86NavInfo
+2025-05-02T14:14:53.2650243Z Errors from xkbcomp are not fatal to the X server
+2025-05-02T14:14:56.2317593Z Xvfb process info:
+2025-05-02T14:14:56.2428414Z runner      2406  0.6  0.3 226196 60928 ?        S    14:14   0:00 Xvfb :99 -screen 0 1024x768x16 -nolisten tcp
+2025-05-02T14:14:56.2429193Z runner      2411  0.0  0.0   7080  2024 ?        S    14:14   0:00 grep Xvfb
+2025-05-02T14:14:56.2459757Z Current directory: /home/runner/work/diagrams/diagrams
+2025-05-02T14:14:56.2460337Z Listing drawio_files directory:
+2025-05-02T14:14:56.2473593Z total 220
+2025-05-02T14:14:56.2473950Z drwxr-xr-x 2 runner docker  4096 May  2 14:14 .
+2025-05-02T14:14:56.2474454Z drwxr-xr-x 7 runner docker  4096 May  2 14:14 ..
+2025-05-02T14:14:56.2474927Z -rw-r--r-- 1 runner docker  6148 May  2 14:14 .DS_Store
+2025-05-02T14:14:56.2475638Z -rw-r--r-- 1 runner docker   381 May  2 14:14 1.1.1.SAP Cloud Simplified.drawio
+2025-05-02T14:14:56.2476546Z -rw-r--r-- 1 runner docker   381 May  2 14:14 1.1.1.SAP_Cloud.drawio
+2025-05-02T14:14:56.2477179Z -rw-r--r-- 1 runner docker 23929 May  2 14:14 2 flowchart.drawio
+2025-05-02T14:14:56.2477535Z -rw-r--r-- 1 runner docker 21562 May  2 14:14 3 network.drawio
+2025-05-02T14:14:56.2477855Z -rw-r--r-- 1 runner docker  4847 May  2 14:14 3.drawio
+2025-05-02T14:14:56.2478175Z -rw-r--r-- 1 runner docker  9045 May  2 14:14 Diagram Test Git
+2025-05-02T14:14:56.2478532Z -rw-r--r-- 1 runner docker  9045 May  2 14:14 Diagram Test Git.drawio
+2025-05-02T14:14:56.2478883Z -rw-r--r-- 1 runner docker  9348 May  2 14:14 Test Diag 123
+2025-05-02T14:14:56.2479222Z -rw-r--r-- 1 runner docker  9348 May  2 14:14 Test Diag 123.drawio
+2025-05-02T14:14:56.2479595Z -rw-r--r-- 1 runner docker  6667 May  2 14:14 Untitled Diagram.drawio
+2025-05-02T14:14:56.2479983Z -rw-r--r-- 1 runner docker 12628 May  2 14:14 Untitled Diagram24.drawio
+2025-05-02T14:14:56.2480363Z -rw-r--r-- 1 runner docker 47862 May  2 14:14 test2lucas.drawio
+2025-05-02T14:14:56.2480705Z -rw-r--r-- 1 runner docker  9356 May  2 14:14 test3lucas.drawio
+2025-05-02T14:14:56.2481038Z -rw-r--r-- 1 runner docker  7172 May  2 14:14 test4lucas.drawio
+2025-05-02T14:14:56.2481369Z Looking for changed .drawio files in this commit...
+2025-05-02T14:14:56.2504921Z Looking for untracked .drawio files...
+2025-05-02T14:14:56.2532771Z Untracked .drawio files: 
+2025-05-02T14:14:56.2533273Z Looking for newly added .drawio files in this commit...
+2025-05-02T14:14:56.2553102Z No newly added files found in git diff
+2025-05-02T14:14:56.2587909Z Newly added .drawio files: 
+2025-05-02T14:14:56.2588442Z Untitled Diagram24.drawio exists in drawio_files directory
+2025-05-02T14:14:56.2635113Z Files changed/added in this commit: drawio_files/Untitled Diagram24.drawio  
+2025-05-02T14:14:56.2638538Z File drawio_files/Untitled no longer exists, skipping.
+2025-05-02T14:14:56.2638930Z File Diagram24.drawio no longer exists, skipping.

@@ -1,0 +1,57 @@
+﻿2025-05-02T14:14:51.0025043Z ##[group]Run # Check if drawio_files directory exists
+2025-05-02T14:14:51.0025496Z [36;1m# Check if drawio_files directory exists[0m
+2025-05-02T14:14:51.0025792Z [36;1mif [ -d "drawio_files" ]; then[0m
+2025-05-02T14:14:51.0026170Z [36;1m  echo "Checking for files without extension in drawio_files directory..."[0m
+2025-05-02T14:14:51.0026906Z [36;1m  [0m
+2025-05-02T14:14:51.0027167Z [36;1m  # First, make sure we have the latest changes from remote[0m
+2025-05-02T14:14:51.0027555Z [36;1m  echo "Fetching latest changes from remote repository..."[0m
+2025-05-02T14:14:51.0028406Z [36;1m  git fetch "***github.com/lucasdreger/diagrams.git"[0m
+2025-05-02T14:14:51.0028703Z [36;1m  [0m
+2025-05-02T14:14:51.0028968Z [36;1m  # Find files without extension in drawio_files directory[0m
+2025-05-02T14:14:51.0029383Z [36;1m  # Use find command with null separator to handle filenames with spaces[0m
+2025-05-02T14:14:51.0029880Z [36;1m  find drawio_files -type f -not -path "*/\.*" -print0 | while IFS= read -r -d $'\0' file; do[0m
+2025-05-02T14:14:51.0030395Z [36;1m    # Check if filename contains a dot (which indicates an extension)[0m
+2025-05-02T14:14:51.0030750Z [36;1m    filename=$(basename "$file")[0m
+2025-05-02T14:14:51.0031016Z [36;1m    if [[ "$filename" != *.* ]]; then[0m
+2025-05-02T14:14:51.0031337Z [36;1m      # Check if the file actually exists before trying to rename it[0m
+2025-05-02T14:14:51.0031661Z [36;1m      if [ -f "$file" ]; then[0m
+2025-05-02T14:14:51.0031941Z [36;1m        echo "Adding .drawio extension to: $file"[0m
+2025-05-02T14:14:51.0032210Z [36;1m        [0m
+2025-05-02T14:14:51.0032506Z [36;1m        # Check if target file already exists (in case we've already renamed it)[0m
+2025-05-02T14:14:51.0032876Z [36;1m        if [ -f "${file}.drawio" ]; then[0m
+2025-05-02T14:14:51.0033216Z [36;1m          echo "Warning: ${file}.drawio already exists. Skipping rename."[0m
+2025-05-02T14:14:51.0033541Z [36;1m        else[0m
+2025-05-02T14:14:51.0033751Z [36;1m          # Rename the file[0m
+2025-05-02T14:14:51.0034013Z [36;1m          mv "$file" "${file}.drawio"[0m
+2025-05-02T14:14:51.0034261Z [36;1m          [0m
+2025-05-02T14:14:51.0034482Z [36;1m          # Add and commit the renamed file[0m
+2025-05-02T14:14:51.0034756Z [36;1m          git add "${file}.drawio"[0m
+2025-05-02T14:14:51.0035065Z [36;1m          # Also remove the original file if git still tracks it[0m
+2025-05-02T14:14:51.0035417Z [36;1m          git rm --ignore-unmatch "$file" > /dev/null 2>&1[0m
+2025-05-02T14:14:51.0035693Z [36;1m          [0m
+2025-05-02T14:14:51.0035944Z [36;1m          git config --local user.name "github-actions[bot]"[0m
+2025-05-02T14:14:51.0036598Z [36;1m          git config --local user.email "github-actions[bot]@users.noreply.github.com"[0m
+2025-05-02T14:14:51.0037030Z [36;1m          git commit -m "Add .drawio extension to $filename"[0m
+2025-05-02T14:14:51.0037315Z [36;1m          [0m
+2025-05-02T14:14:51.0037557Z [36;1m          # Push changes immediately to avoid conflicts[0m
+2025-05-02T14:14:51.0037896Z [36;1m          echo "Pushing changes to remote repository..."[0m
+2025-05-02T14:14:51.0038794Z [36;1m          git push "***github.com/lucasdreger/diagrams.git" HEAD:${GITHUB_REF#refs/heads/}[0m
+2025-05-02T14:14:51.0039174Z [36;1m        fi[0m
+2025-05-02T14:14:51.0039357Z [36;1m      else[0m
+2025-05-02T14:14:51.0039611Z [36;1m        echo "Warning: File $file no longer exists, skipping."[0m
+2025-05-02T14:14:51.0039909Z [36;1m      fi[0m
+2025-05-02T14:14:51.0040083Z [36;1m    fi[0m
+2025-05-02T14:14:51.0040259Z [36;1m  done[0m
+2025-05-02T14:14:51.0040434Z [36;1melse[0m
+2025-05-02T14:14:51.0040720Z [36;1m  echo "drawio_files directory not found, skipping extension check."[0m
+2025-05-02T14:14:51.0041054Z [36;1mfi[0m
+2025-05-02T14:14:51.0073220Z shell: /usr/bin/bash -e {0}
+2025-05-02T14:14:51.0073470Z ##[endgroup]
+2025-05-02T14:14:51.0124840Z Checking for files without extension in drawio_files directory...
+2025-05-02T14:14:51.0125291Z Fetching latest changes from remote repository...
+2025-05-02T14:14:51.1656785Z From https://github.com/lucasdreger/diagrams
+2025-05-02T14:14:51.1657186Z  * branch            HEAD       -> FETCH_HEAD
+2025-05-02T14:14:51.1837461Z Adding .drawio extension to: drawio_files/Test Diag 123
+2025-05-02T14:14:51.1838186Z Warning: drawio_files/Test Diag 123.drawio already exists. Skipping rename.
+2025-05-02T14:14:51.1884721Z Adding .drawio extension to: drawio_files/Diagram Test Git
+2025-05-02T14:14:51.1885616Z Warning: drawio_files/Diagram Test Git.drawio already exists. Skipping rename.
