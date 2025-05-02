@@ -1,4 +1,9 @@
-# Teams Notifications for Draw.io Diagrams Workflow
+# Teams Notifications f### Success Notification (Green)
+- ✅ Visual confirmation that the workflow completed successfully
+- Number of files processed with a sample of processed files
+- Who triggered the workflow (with profile picture)
+- Link to view the specific job logs
+- Link to view the complete workflow runw.io Diagrams Workflow
 
 ## Overview
 
@@ -6,6 +11,16 @@ The Draw.io diagrams conversion workflow includes automatic Microsoft Teams noti
 
 1. **Success Notification**: The conversion completes successfully and files are updated
 2. **Failure Notification**: The workflow encounters an error during execution
+
+> **Note:** Microsoft Teams webhooks are simple to use - they only require the webhook URL itself. No username, password, or additional authentication is needed as all the authorization is embedded in the URL.
+
+## Sender Identification
+
+By default, webhook messages appear with a generic sender name (often showing as "Unknown user"). Our workflow addresses this by:
+
+1. Including the GitHub user's profile picture using `activityImage: "https://github.com/${{ github.actor }}.png?size=40"`
+2. Clearly indicating who triggered the workflow in the message facts
+3. Using proper branding and styling to identify the message source
 
 ## How It Works
 
@@ -29,27 +44,32 @@ The workflow uses your configured `TEAMS_WEBHOOK` secret to send adaptive cards 
 
 ### Success:
 ```
-✅ Draw.io Conversion Completed Successfully
+[Profile Picture] ✅ Draw.io Conversion Completed Successfully
 ---------------------------------------------
-Repository: your-org/diagrams
-Files Processed: 3
-Triggered by: username
-SharePoint Upload: Completed
+Repository: lucasdreger/diagrams
+Files Processed: 3 (diagram1, diagram2, diagram3)
+Triggered by: lucasdreger
+Commit: Update SAP Cloud diagram
 
-[View Workflow Run]
+[View Job Logs] [View Workflow Run]
 ```
 
 ### Failure:
 ```
-⚠️ Draw.io Conversion Workflow Failed
+[Profile Picture] ⚠️ Draw.io Conversion Workflow Failed
 ------------------------------------
-Repository: your-org/diagrams
+Repository: lucasdreger/diagrams
 Branch: main
-Triggered by: username
+Triggered by: lucasdreger
 Commit: Update diagram file
+Job: convert (12345678)
 
-[View Workflow Run]
+⚠️ The diagram conversion workflow has failed. Check the logs for more details.
+
+[View Job Logs] [View Workflow Run]
 ```
+
+The notifications include the GitHub profile picture of the person who triggered the workflow, making it clear that this message is related to their action.
 
 ## Troubleshooting
 

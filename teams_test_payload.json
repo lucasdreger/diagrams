@@ -1,0 +1,23 @@
+{
+  "@type": "MessageCard",
+  "@context": "http://schema.org/extensions",
+  "themeColor": "0076D7",
+  "summary": "Test Notification",
+  "sections": [
+    {
+      "activityTitle": "🧪 Teams Webhook Test",
+      "activitySubtitle": "This is a test notification",
+      "facts": [
+        {
+          "name": "Purpose",
+          "value": "Demonstration"
+        },
+        {
+          "name": "Date",
+          "value": "02.05.2025 21:17:17"
+        }
+      ],
+      "text": "To send this to Teams, you would run:\n```\ncurl -H \"Content-Type: application/json\" -d @teams_test_payload.json YOUR_WEBHOOK_URL\n```"
+    }
+  ]
+}
