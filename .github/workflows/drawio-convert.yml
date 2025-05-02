@@ -143,6 +143,10 @@ jobs:
             FORMATTED_TIME=$(date +"%H:%M:%S")
             echo "$FORMATTED_DATE,$FORMATTED_TIME,\"GitHub Actions\",\"Debug Entry\",\"Test\",\"No files changed\",\"Workflow run to verify changelog\",\"0.0\",\"debug\"" >> html_files/CHANGELOG.csv
             echo "Added debug entry to changelog"
+            
+            # Check if we now have content in the changelog
+            echo "Contents of CHANGELOG.csv after adding debug entry:"
+            cat html_files/CHANGELOG.csv
           fi
           
           # Only process the .drawio files that were changed in this commit
@@ -363,7 +367,57 @@ jobs:
               const header = lines[0]; // Get header row
               console.log(`Header: ${header}`);
               const dataRows = lines.slice(1); // Get data rows
-              console.log(`Found ${dataRows.length} data rows`)
+              console.log(`Found ${dataRows.length} data rows`);
+              
+              // If there's no data (only header), add a test row so we have something to display
+              if (dataRows.length === 0) {
+                console.log("No data rows found in changelog. Adding a test entry.");
+                // Get today's date in DD.MM.YYYY format
+                const today = new Date();
+                const todayStr = `${String(today.getDate()).padStart(2, '0')}.${String(today.getMonth() + 1).padStart(2, '0')}.${today.getFullYear()}`;
+                const timeStr = `${String(today.getHours()).padStart(2, '0')}:${String(today.getMinutes()).padStart(2, '0')}:${String(today.getSeconds()).padStart(2, '0')}`;
+                
+                // Add a test entry directly to the raw file
+                const testEntry = `${todayStr},${timeStr},"GitHub Actions","CSV Test","New","SharePoint Upload Test","Automated test entry to verify SharePoint upload","0.0","N/A"`;
+                fs.appendFileSync(changelogPath, testEntry + '\n', 'utf8');
+                console.log(`Test entry added to changelog: ${testEntry}`);
+                
+                // Also add it to our dataRows for processing
+                dataRows.push(testEntry);
+              }
+              
+              // Debug: Output the current changelog structure
+              console.log("Current changelog structure from file:");
+              if (dataRows.length > 0) {
+                console.log("First row:", dataRows[0]);
+                
+                // Test parsing the first row
+                try {
+                  const parseCSV = (text) => {
+                    const result = [];
+                    const regex = /("[^"]*"|[^,"\r\n]+)(?=,|\r\n|$)|^(?=,|$)|,(?=,|$)/g;
+                    let m;
+                    
+                    while ((m = regex.exec(text)) !== null) {
+                      // Remove quotes if the field is quoted
+                      let field = m[1] || '';
+                      if (field.startsWith('"') && field.endsWith('"')) {
+                        field = field.substring(1, field.length - 1);
+                      }
+                      result.push(field);
+                    }
+                    
+                    return result;
+                  };
+                  
+                  const fields = parseCSV(dataRows[0]);
+                  console.log("Parsed first row:", fields);
+                  console.log(`Number of fields: ${fields.length}`);
+                  console.log(`Field values: ${fields.join(' | ')}`);
+                } catch (e) {
+                  console.error("Error parsing first row:", e);
+                }
+              }
               
               // Create a properly formatted CSV with all the needed columns in the requested order
               // Date, Time, Diagram, Action, File, Commit Message, Version, Commit Hash, SharePoint Upload Date
@@ -409,7 +463,7 @@ jobs:
                     // For reference, original columns are:
                     // [0]Date, [1]Time, [2]User, [3]Diagram, [4]Action, [5]File, [6]Commit Message, [7]Version, [8]Commit Hash
                     
-                    // New format:
+                    // New format for SharePoint (removes User column):
                     // [0]Date, [1]Time, [2]Diagram, [3]Action, [4]File, [5]Commit Message, [6]Version, [7]Commit Hash, [8]SharePoint Upload Date
                     
                     // Create a properly formatted CSV row with quotes around each field
@@ -419,12 +473,13 @@ jobs:
                     const formattedRow = [
                       extractedCols[0],                      // Date
                       extractedCols[1],                      // Time
-                      `"${(extractedCols[3] || '').replace(/"/g, '""')}"`,  // Diagram (index 3 because User is at index 2)
+                      `"${(extractedCols[2] || '').replace(/"/g, '""')}"`,  // User
+                      `"${(extractedCols[3] || '').replace(/"/g, '""')}"`,  // Diagram
                       `"${(extractedCols[4] || '').replace(/"/g, '""')}"`,  // Action
                       `"${(extractedCols[5] || '').replace(/"/g, '""')}"`,  // File
                       `"${(extractedCols[6] || '').replace(/"/g, '""')}"`,  // Commit Message
                       extractedCols[7] || '',                // Version
-                      extractedCols[8] || '',                // Commit Hash (new column)
+                      extractedCols[8] || '',                // Commit Hash
                       today                                  // SharePoint Upload Date
                     ].join(',');
                     
