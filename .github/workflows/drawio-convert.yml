@@ -75,7 +75,7 @@ jobs:
                       
                       # Push changes immediately to avoid conflicts
                       echo "Pushing changes to remote repository..."
-                      git push "https://${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" HEAD:${GITHUB_REF#refs/heads/}"
+                      git push "https://${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" HEAD:${GITHUB_REF#refs/heads/}
                     fi
                   fi
                 else
