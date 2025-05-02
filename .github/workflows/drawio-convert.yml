@@ -113,10 +113,19 @@ jobs:
           EOL
           chmod +x /tmp/convert-drawio.sh
 
+          # Create a file to track processed files to avoid duplicates
+          > /tmp/processed_files.txt
+          
           # Function to safely process filenames with spaces
           process_diagram_file() {
             local file_to_process="$1"
             echo "===== Processing: $file_to_process ====="
+            
+            # Check if this file has already been processed
+            if grep -q "^$file_to_process\$" /tmp/processed_files.txt; then
+              echo "File $file_to_process has already been processed in this run, skipping."
+              return 3
+            fi
             
             # Skip if file doesn't exist
             if [ ! -f "$file_to_process" ]; then
@@ -227,6 +236,9 @@ jobs:
             echo "$formatted_date,$formatted_time,\"$author\",\"${base_name}\",\"$action_desc\",\"${base_name}.drawio to ${base_name}.html\",\"$commit_msg_escaped\",\"$version\",\"$short_hash\"" >> html_files/CHANGELOG.csv
             echo "Added entry to changelog for $file_to_process ($action_desc) with version $version"
             
+            # Mark this file as processed to avoid duplicates
+            echo "$file_to_process" >> /tmp/processed_files.txt
+            
             return 0
           }
 
@@ -299,14 +311,26 @@ jobs:
             echo "No changed files with spaces detected in this commit."
           fi
 
-          # Now process changed files
+          # Now process remaining changed files (skipping those with spaces that were already processed)
           echo "========================================="
-          echo "PROCESSING CHANGED FILES"
+          echo "PROCESSING REMAINING CHANGED FILES"
           echo "========================================="
           
-          # Read line by line to properly handle filenames with spaces
+          # Create a temporary file for files without spaces
+          > /tmp/files_without_spaces.txt
+          
+          # Filter out files that were already processed (those with spaces)
+          while IFS= read -r changed_file || [ -n "$changed_file" ]; do
+            # Skip files with spaces since they've already been processed
+            if [[ "$changed_file" != *" "* ]]; then
+              echo "$changed_file" >> /tmp/files_without_spaces.txt
+            fi
+          done < /tmp/changed_files.txt
+          
+          # Read line by line to process files without spaces
           while IFS= read -r changed_file || [ -n "$changed_file" ]; do
             # Use our dedicated function to process the file
+            echo "Processing file without spaces: $changed_file"
             process_diagram_file "$changed_file"
 
             # NOTE: This part is no longer needed as the process_diagram_file function handles all this
@@ -405,7 +429,7 @@ jobs:
               # The changelog entry has already been written by the process_diagram_file function
               echo "Processed $changed_file with version $VERSION (hash: $SHORT_HASH)"
             
-          done < /tmp/changed_files.txt
+          done < /tmp/files_without_spaces.txt
 
       # Step 5: Commit and push changes
       - name: Commit and push changes
