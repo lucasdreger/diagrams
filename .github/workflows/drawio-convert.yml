@@ -115,15 +115,35 @@ jobs:
           echo "Listing drawio_files directory:"
           ls -la drawio_files || echo "drawio_files directory not found"
           
-          # Get the list of changed .drawio files in the current commit
+          # Get the list of changed .drawio files in the current commit WITH DEBUGGING
+          echo "DEBUG: Getting list of changed .drawio files..."
+          git diff --name-only HEAD^ HEAD || echo "git diff failed - may be first commit"
           CHANGED_FILES=$(git diff --name-only HEAD^ HEAD 2>/dev/null | grep -E "\.drawio$" || echo "")
           
           # If HEAD^ fails (first commit), try against empty tree
           if [ -z "$CHANGED_FILES" ]; then
+            echo "DEBUG: No files found with first method, trying against empty tree..."
+            git diff-tree --name-only --no-commit-id --root -r HEAD || echo "git diff-tree failed"
             CHANGED_FILES=$(git diff-tree --name-only --no-commit-id --root -r HEAD | grep -E "\.drawio$" || echo "")
+            
+            # If still empty, try looking for all .drawio files for first run
+            if [ -z "$CHANGED_FILES" ] && [ ! -f "html_files/CHANGELOG.csv" ]; then
+              echo "DEBUG: First run detected, will process all existing .drawio files"
+              CHANGED_FILES=$(find . -name "*.drawio" | sed 's|^./||')
+            fi
           fi
           
           echo "Files changed in this commit: $CHANGED_FILES"
+          
+          # If still no files found, add a test entry to make sure changelog works
+          if [ -z "$CHANGED_FILES" ]; then
+            echo "DEBUG: No changed files found, adding a debug entry to changelog"
+            # Create a timestamp entry in the changelog for debugging
+            FORMATTED_DATE=$(date +"%d.%m.%Y")
+            FORMATTED_TIME=$(date +"%H:%M:%S")
+            echo "$FORMATTED_DATE,$FORMATTED_TIME,\"GitHub Actions\",\"Debug Entry\",\"Test\",\"No files changed\",\"Workflow run to verify changelog\",\"0.0\",\"debug\"" >> html_files/CHANGELOG.csv
+            echo "Added debug entry to changelog"
+          fi
           
           # Only process the .drawio files that were changed in this commit
           # This preserves all other SVG/HTML files unchanged
@@ -316,13 +336,34 @@ jobs:
               // Read and format the changelog file for SharePoint
               const changelogPath = path.join(process.env.GITHUB_WORKSPACE, 'html_files', 'CHANGELOG.csv');
               console.log(`Reading changelog from: ${changelogPath}`);
+              
+              // Add debug info to check file content and existence
+              try {
+                if (!fs.existsSync(changelogPath)) {
+                  console.error(`ERROR: Changelog file does not exist at path: ${changelogPath}`);
+                  // Create an empty changelog if it doesn't exist
+                  fs.writeFileSync(changelogPath, 'Date,Time,User,Diagram,Action,File,Commit Message,Version,Commit Hash\n', 'utf8');
+                  console.log(`Created new empty changelog file at ${changelogPath}`);
+                } else {
+                  const stats = fs.statSync(changelogPath);
+                  console.log(`Changelog file exists, size: ${stats.size} bytes`);
+                }
+              } catch (fileError) {
+                console.error(`Error checking changelog file: ${fileError.message}`);
+              }
+              
               const rawContent = fs.readFileSync(changelogPath, 'utf8');
+              console.log(`Raw content length: ${rawContent.length} characters`);
+              console.log(`First 200 characters of content: ${rawContent.substring(0, 200)}`);
               
               // Format the changelog with proper headers and content
               // First, parse the existing CSV
               const lines = rawContent.split('\n').filter(line => line.trim());
+              console.log(`Found ${lines.length} lines in the changelog`);
               const header = lines[0]; // Get header row
+              console.log(`Header: ${header}`);
               const dataRows = lines.slice(1); // Get data rows
+              console.log(`Found ${dataRows.length} data rows`)
               
               // Create a properly formatted CSV with all the needed columns in the requested order
               // Date, Time, Diagram, Action, File, Commit Message, Version, Commit Hash, SharePoint Upload Date
@@ -361,26 +402,29 @@ jobs:
                     const extractedCols = parseCSV(row);
                     
                     // Ensure we have enough columns and handle missing values
-                    while (extractedCols.length < 8) {
+                    while (extractedCols.length < 9) {
                       extractedCols.push('');
                     }
                     
                     // For reference, original columns are:
-                    // [0]Date, [1]Time, [2]User, [3]Diagram, [4]Action, [5]File, [6]Commit Message, [7]Version
+                    // [0]Date, [1]Time, [2]User, [3]Diagram, [4]Action, [5]File, [6]Commit Message, [7]Version, [8]Commit Hash
                     
                     // New format:
-                    // [0]Date, [1]Time, [2]Diagram, [3]Action, [4]File, [5]Commit Message, [6]Version, [7]SharePoint Upload Date
+                    // [0]Date, [1]Time, [2]Diagram, [3]Action, [4]File, [5]Commit Message, [6]Version, [7]Commit Hash, [8]SharePoint Upload Date
                     
                     // Create a properly formatted CSV row with quotes around each field
+                    // Log the extracted columns for debugging
+                    console.log(`Processing row: ${JSON.stringify(extractedCols)}`);
+                    
                     const formattedRow = [
                       extractedCols[0],                      // Date
                       extractedCols[1],                      // Time
-                      `"${extractedCols[3].replace(/"/g, '""')}"`,  // Diagram
-                      `"${extractedCols[4].replace(/"/g, '""')}"`,  // Action
-                      `"${extractedCols[5].replace(/"/g, '""')}"`,  // File
-                      `"${extractedCols[6].replace(/"/g, '""')}"`,  // Commit Message
-                      extractedCols[7],                      // Version
-                      extractedCols[8],                      // Commit Hash
+                      `"${(extractedCols[3] || '').replace(/"/g, '""')}"`,  // Diagram (index 3 because User is at index 2)
+                      `"${(extractedCols[4] || '').replace(/"/g, '""')}"`,  // Action
+                      `"${(extractedCols[5] || '').replace(/"/g, '""')}"`,  // File
+                      `"${(extractedCols[6] || '').replace(/"/g, '""')}"`,  // Commit Message
+                      extractedCols[7] || '',                // Version
+                      extractedCols[8] || '',                // Commit Hash (new column)
                       today                                  // SharePoint Upload Date
                     ].join(',');
                     
