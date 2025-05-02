@@ -80,9 +80,7 @@ jobs:
             done
           else
             echo "drawio_files directory not found, skipping extension check."
-          fi
-
-      # Step 3: Create output directories
+          fi          # Step 3: Create output directories
       - name: Create output folders
         run: |
           mkdir -p svg_files html_files
@@ -325,8 +323,8 @@ jobs:
               const dataRows = lines.slice(1); // Get data rows
               
               // Create a properly formatted CSV with all the needed columns in the requested order
-              // Date, Time, Diagram, Action, File, Commit Message, Version, SharePoint Upload Date
-              let fileContent = 'Date,Time,Diagram,Action,File,Commit Message,Version,SharePoint Upload Date\n';
+              // Date, Time, Diagram, Action, File, Commit Message, Version, Commit Hash, SharePoint Upload Date
+              let fileContent = 'Date,Time,Diagram,Action,File,Commit Message,Version,Commit Hash,SharePoint Upload Date\n';
               
               // Add the data rows with today's upload date
               const today = new Date().toLocaleDateString('en-GB', {
