@@ -13,7 +13,10 @@ This workflow fully supports filenames with spaces in them. You can create and m
 - `System Architecture - Version 2.drawio`
 - `Team Diagram - Q3 Review.drawio`
 
-All files with spaces are automatically detected and properly processed by the workflow.
+The workflow processes only files that were changed in the current commit, including those with spaces in their names. This ensures that:
+1. Only modified diagrams are converted and added to the changelog
+2. Files with spaces are handled properly without breaking the processing
+3. The changelog accurately reflects just the files that were changed in each commit
 
 ## Key Features
 

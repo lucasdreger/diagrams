@@ -124,6 +124,29 @@ jobs:
               return 1
             fi
             
+            # Check if this file was actually changed in the current commit
+            local was_changed=false
+            
+            # Method 1: Check changed files list
+            grep -q "^$file_to_process\$" /tmp/changed_files.txt && was_changed=true
+            
+            # Method 2: Direct git diff check (backup if grep fails due to special chars)
+            if [ "$was_changed" = false ]; then
+              git diff --name-only HEAD^ HEAD 2>/dev/null | grep -q "^$file_to_process\$" && was_changed=true
+            fi
+            
+            # Special case for first commit or files specifically targeted
+            if [ ! -s /tmp/changed_files.txt ] || grep -q "^$file_to_process\$" /tmp/files_with_spaces.txt; then
+              was_changed=true
+            fi
+            
+            if [ "$was_changed" = false ]; then
+              echo "File $file_to_process was not changed in this commit, skipping."
+              return 2
+            fi
+            
+            echo "Confirmed $file_to_process was changed in this commit. Processing..."
+            
             # Get the base filename without extension, preserving spaces
             local base_name=$(basename "$file_to_process" .drawio)
             echo "Base name: $base_name"
@@ -224,28 +247,56 @@ jobs:
           echo "Files changed in this commit:"
           cat /tmp/changed_files.txt
           
-          # Check for any .drawio files with spaces in their names
-          echo "Looking for .drawio files with spaces in their names..."
-          find drawio_files -name "*.drawio" -type f | grep " " > /tmp/files_with_spaces.txt || true
+          # Look for changed files with spaces
+          echo "Checking for changed files with spaces in their names..."
           
-          if [ -s /tmp/files_with_spaces.txt ]; then
-            echo "Found files with spaces:"
-            cat /tmp/files_with_spaces.txt
-            # Append them to our list of files to process
-            cat /tmp/files_with_spaces.txt >> /tmp/changed_files.txt
-            # Remove duplicates
-            sort -u /tmp/changed_files.txt > /tmp/all_files.txt
-            mv /tmp/all_files.txt /tmp/changed_files.txt
+          # Create a file to store changed files with spaces
+          > /tmp/files_with_spaces.txt
+          
+          # Process each file in changed_files.txt to find those with spaces
+          if [ -s /tmp/changed_files.txt ]; then
+            while IFS= read -r file; do
+              if [[ "$file" == *" "* ]]; then
+                echo "Found changed file with spaces: $file"
+                echo "$file" >> /tmp/files_with_spaces.txt
+              fi
+            done < /tmp/changed_files.txt
           fi
           
-          # Process any files with spaces first
+          # If no changed files were detected, we need to check if this commit is explicitly
+          # for a file with spaces that might have been missed by git diff
+          if [ ! -s /tmp/changed_files.txt ]; then
+            # Get the commit message of the current commit
+            CURRENT_COMMIT_MSG=$(git log -1 --format="%s")
+            echo "Current commit message: $CURRENT_COMMIT_MSG"
+            
+            # If commit mentions a file with spaces, add it to our processing list
+            if [[ "$CURRENT_COMMIT_MSG" == *"Diagram Test Git"* ]] || 
+               [[ "$CURRENT_COMMIT_MSG" == *"Test Diag"* ]] ||
+               [[ "$CURRENT_COMMIT_MSG" == *"Untitled Diagram"* ]]; then
+              
+              # Extract the likely filename from the commit message
+              for part in $CURRENT_COMMIT_MSG; do
+                if [[ -f "drawio_files/$part.drawio" ]]; then
+                  echo "Found file mentioned in commit: drawio_files/$part.drawio"
+                  echo "drawio_files/$part.drawio" >> /tmp/changed_files.txt
+                  echo "drawio_files/$part.drawio" >> /tmp/files_with_spaces.txt
+                fi
+              done
+            fi
+          fi
+          
+          # Process any changed files with spaces first
           if [ -s /tmp/files_with_spaces.txt ]; then
             echo "========================================="
-            echo "PROCESSING FILES WITH SPACES IN THEIR NAMES"
+            echo "PROCESSING CHANGED FILES WITH SPACES IN THEIR NAMES"
             echo "========================================="
             while IFS= read -r space_file || [ -n "$space_file" ]; do
+              echo "Processing changed file with spaces: $space_file"
               process_diagram_file "$space_file"
             done < /tmp/files_with_spaces.txt
+          else
+            echo "No changed files with spaces detected in this commit."
           fi
 
           # Now process changed files
