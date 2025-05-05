@@ -19,7 +19,7 @@ The Draw.io diagrams conversion workflow includes automatic Microsoft Teams noti
 By default, webhook messages appear with a generic sender name (often showing as "Unknown user"). Our workflow addresses this by:
 
 1. Including the GitHub user's profile picture using `activityImage: "https://github.com/${{ github.actor }}.png?size=40"`
-2. Clearly indicating who triggered the workflow in the message facts
+2. Using the full name (not just username) of who triggered the workflow when available
 3. Using proper branding and styling to identify the message source
 
 ## How It Works
@@ -44,32 +44,52 @@ The workflow uses your configured `TEAMS_WEBHOOK` secret to send adaptive cards 
 
 ### Success:
 ```
-[Profile Picture] ✅ Draw.io Conversion Completed Successfully
+[Profile Picture] ✅ Draw.io Diagrams Updated
 ---------------------------------------------
 Repository: lucasdreger/diagrams
 Files Processed: 3 (diagram1, diagram2, diagram3)
-Triggered by: lucasdreger
+Triggered by: Lucas Dreger
 Commit: Update SAP Cloud diagram
+
+📊 Diagram updates are available and have been successfully processed.
+
+[View Job Logs] [View Workflow Run]
+```
+
+### New Diagram:
+```
+[Profile Picture] ✅ New Draw.io Diagram Created
+---------------------------------------------
+Repository: lucasdreger/diagrams
+Files Processed: 1 (3.2.1. SAP Cloud Simplified)
+Triggered by: Lucas Dreger
+Commit: Added 3.2.1. SAP Cloud Simplified.drawio
+
+📋 New empty diagram(s) have been created: 3.2.1. SAP Cloud Simplified
 
 [View Job Logs] [View Workflow Run]
 ```
 
 ### Failure:
 ```
-[Profile Picture] ⚠️ Draw.io Conversion Workflow Failed
+[Profile Picture] ❌ URGENT: Draw.io Conversion Workflow Failed
 ------------------------------------
 Repository: lucasdreger/diagrams
 Branch: main
-Triggered by: lucasdreger
+Triggered by: Lucas Dreger
 Commit: Update diagram file
+Failed Files: drawio_files/3.2.1. SAP Cloud Simplified.drawio
 Job: convert (12345678)
 
-⚠️ The diagram conversion workflow has failed. Check the logs for more details.
+⚠️ ALERT: The diagram conversion workflow has failed. Check the logs for more details.
 
 [View Job Logs] [View Workflow Run]
 ```
 
-The notifications include the GitHub profile picture of the person who triggered the workflow, making it clear that this message is related to their action.
+All notifications include:
+1. The GitHub profile picture of the person who triggered the workflow
+2. The full name (when available) instead of just the GitHub username
+3. An attachment to the CHANGELOG.csv file for reference and tracking
 
 ## Troubleshooting
 

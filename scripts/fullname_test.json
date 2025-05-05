@@ -1,0 +1,47 @@
+{
+  "@type": "MessageCard",
+  "@context": "http://schema.org/extensions",
+  "themeColor": "0076D7",
+  "summary": "Draw.io Conversion Test - Full Name",
+  "sections": [
+    {
+      "activityTitle": "🧪 Teams Webhook Test - Full Name Display",
+      "activitySubtitle": "05.05.2025 16:30:45",
+      "activityImage": "https://github.com/lucasdreger.png?size=40",
+      "facts": [
+        {
+          "name": "Repository",
+          "value": "lucasdreger/diagrams"
+        },
+        {
+          "name": "Triggered by",
+          "value": "Lucas Dreger"
+        },
+        {
+          "name": "Purpose",
+          "value": "Testing full name display and attachments"
+        }
+      ],
+      "text": "📊 This test demonstrates displaying full names instead of usernames and attaching the changelog CSV.",
+      "attachments": [
+        {
+          "contentType": "reference",
+          "contentUrl": "https://github.com/lucasdreger/diagrams/raw/main/html_files/CHANGELOG.csv",
+          "name": "Diagram_Changelog.csv"
+        }
+      ]
+    }
+  ],
+  "potentialAction": [
+    {
+      "@type": "OpenUri",
+      "name": "View Repository",
+      "targets": [
+        {
+          "os": "default",
+          "uri": "https://github.com/lucasdreger/diagrams"
+        }
+      ]
+    }
+  ]
+}

@@ -920,7 +920,7 @@ jobs:
                   },
                   {
                     "name": "Triggered by",
-                    "value": "${{ github.actor }}"
+                    "value": "$TRIGGERER_NAME"
                   },
                   {
                     "name": "Run ID",
