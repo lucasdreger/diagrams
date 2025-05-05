@@ -527,6 +527,80 @@ jobs:
             echo "changes_made=true" >> $GITHUB_OUTPUT
           fi
           
+      # Step 5.1: Handle potential merge conflicts
+      - name: Handle potential merge conflicts
+        if: steps.commit_changes.outputs.changes_made == 'true'
+        run: |
+          # Check if there are merge conflicts
+          if git status | grep -q "You have unmerged paths"; then
+            echo "Detected merge conflicts. Attempting to resolve..."
+            
+            # Focus on CHANGELOG.csv which is the most common conflict
+            if git status | grep -q "CHANGELOG.csv"; then
+              echo "Resolving conflict in CHANGELOG.csv..."
+              
+              # Get our version (HEAD)
+              git show :2:html_files/CHANGELOG.csv > /tmp/ours_changelog.csv
+              
+              # Get their version (from remote)
+              git show :3:html_files/CHANGELOG.csv > /tmp/theirs_changelog.csv
+              
+              # Combine both files (skip header from the second file)
+              head -n 1 /tmp/ours_changelog.csv > /tmp/merged_changelog.csv
+              (tail -n +2 /tmp/ours_changelog.csv && tail -n +2 /tmp/theirs_changelog.csv) | sort | uniq >> /tmp/merged_changelog.csv
+              
+              # Replace the conflicted file with our merged version
+              cp /tmp/merged_changelog.csv html_files/CHANGELOG.csv
+              
+              # Mark the conflict as resolved
+              git add html_files/CHANGELOG.csv
+              echo "CHANGELOG.csv conflict resolved automatically."
+            else
+              echo "Conflicts detected in files other than CHANGELOG.csv."
+              echo "Please check the workflow logs and resolve conflicts manually."
+              exit 1
+            fi
+            
+            # Continue with the rebase
+            if git rebase --continue; then
+              echo "Rebase completed successfully after resolving conflicts."
+            else
+              echo "Could not continue rebase. Please check the repository."
+              exit 1
+            fi
+          else
+            echo "No merge conflicts detected."
+          fi
+          
+      # Step 5.2: Push changes after handling conflicts
+      - name: Push changes
+        if: steps.commit_changes.outputs.changes_made == 'true'
+        run: |
+          # Try to push changes, with multiple retries for transient issues
+          MAX_RETRIES=3
+          RETRY_COUNT=0
+          PUSH_SUCCESS=false
+          
+          while [ $RETRY_COUNT -lt $MAX_RETRIES ] && [ "$PUSH_SUCCESS" = false ]; do
+            if git push origin main; then
+              echo "Successfully pushed changes to remote repository."
+              PUSH_SUCCESS=true
+            else
+              RETRY_COUNT=$((RETRY_COUNT + 1))
+              if [ $RETRY_COUNT -lt $MAX_RETRIES ]; then
+                echo "Push failed. Retrying in 5 seconds... (Attempt $RETRY_COUNT of $MAX_RETRIES)"
+                sleep 5
+                
+                # Pull latest changes again before retrying
+                echo "Pulling latest changes before retry..."
+                git pull --rebase origin main || true
+              else
+                echo "Failed to push after $MAX_RETRIES attempts."
+                echo "::warning::Failed to push changes automatically. Please check repository."
+              fi
+            fi
+          done
+
       # Step 6: Upload changelog to SharePoint
       - name: Upload changelog to SharePoint
         if: steps.commit_changes.outputs.changes_made == 'true'
