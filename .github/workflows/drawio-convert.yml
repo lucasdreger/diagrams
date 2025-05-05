@@ -214,11 +214,20 @@ jobs:
             mkdir -p "svg_files" "html_files"
             local output_svg="svg_files/${base_name}.svg"
             
-            # Check if this is likely a new empty diagram
+            # Check if this is likely a new empty diagram - use more relaxed criteria
             local is_new_empty_diagram=false
-            if [ "$file_size" -lt 500 ] && grep -q "<diagram" "$file_to_process" && ! grep -q "<mxCell" "$file_to_process"; then
-              echo "This appears to be a new empty diagram. Will use special handling."
-              is_new_empty_diagram=true
+            if [ "$file_size" -lt 1000 ]; then
+              # First case: Very small file that's definitely a new diagram
+              if [ "$file_size" -lt 500 ] && ! grep -q "<mxCell.*value=" "$file_to_process"; then
+                echo "This appears to be a new empty diagram (very small size). Will use special handling."
+                is_new_empty_diagram=true
+              # Second case: Small file that might be empty but has slightly more data
+              elif grep -q "<diagram" "$file_to_process" && ! grep -q "<mxCell.*value=" "$file_to_process"; then
+                echo "This appears to be an empty or minimal diagram. Will use special handling."
+                is_new_empty_diagram=true
+              else
+                echo "File is small but has content. Will attempt normal conversion."
+              fi
             fi
             
             # Convert to SVG with improved error handling
@@ -229,7 +238,14 @@ jobs:
             if [ "$is_new_empty_diagram" = true ]; then
               # For empty diagrams, create a simple SVG directly
               echo "Creating blank SVG for new empty diagram..."
-              echo '<svg xmlns="http://www.w3.org/2000/svg" width="640" height="480" viewBox="0 0 640 480"><rect width="100%" height="100%" fill="white"/><text x="50%" y="50%" font-family="Arial" font-size="16" text-anchor="middle">New Empty Diagram</text><text x="50%" y="52%" font-family="Arial" font-size="12" text-anchor="middle" dy="20">Ready for editing</text></svg>' > "$output_svg"
+              # Extract the diagram name from the file for a personalized message
+              DIAGRAM_NAME=$(basename "$file_to_process" .drawio)
+              echo '<svg xmlns="http://www.w3.org/2000/svg" width="800" height="600" viewBox="0 0 800 600">
+                <rect width="100%" height="100%" fill="white"/>
+                <text x="50%" y="45%" font-family="Arial" font-size="20" text-anchor="middle" fill="#333333">'"${DIAGRAM_NAME}"'</text>
+                <text x="50%" y="50%" font-family="Arial" font-size="16" text-anchor="middle" fill="#666666">New Diagram - Ready for Editing</text>
+                <text x="50%" y="55%" font-family="Arial" font-size="12" text-anchor="middle" fill="#888888">This is an empty diagram template. Open the original .drawio file to edit.</text>
+              </svg>' > "$output_svg"
               
               if [ -f "$output_svg" ]; then
                 echo "Successfully created SVG for new empty diagram"
@@ -238,15 +254,21 @@ jobs:
                 return 1
               fi
             else
+              # Prepare the display for conversion
+              export DISPLAY=:99
+              Xvfb :99 -screen 0 1280x1024x24 > /dev/null 2>&1 &
+              sleep 1
+                            
               # Standard conversion process for non-empty diagrams
-              # Method 1: Try the main conversion script with timeout to avoid hanging
-              timeout 60s xvfb-run -a /tmp/convert-drawio.sh "$file_to_process" "$output_svg" 2>/tmp/conversion_error.log
+              echo "Trying conversion method 1: convert-drawio.sh script"
+              timeout 90s xvfb-run --server-args="-screen 0 1280x1024x24" /tmp/convert-drawio.sh "$file_to_process" "$output_svg" 2>/tmp/conversion_error.log
               
               # Check if conversion succeeded
-              if [ ! -f "$output_svg" ]; then
+              if [ ! -f "$output_svg" ] || [ ! -s "$output_svg" ]; then
                 echo "First conversion method failed. Trying alternative method..."
                 # Method 2: Try the direct drawio command
-                timeout 60s xvfb-run -a drawio -x -f svg -o "$output_svg" "$file_to_process" 2>>/tmp/conversion_error.log
+                echo "Trying conversion method 2: drawio command with -x flag"
+                timeout 90s xvfb-run --server-args="-screen 0 1280x1024x24" drawio -x -f svg -o "$output_svg" "$file_to_process" 2>>/tmp/conversion_error.log
                 
                 # Method 3: If still failed, try with different display settings
                 if [ ! -f "$output_svg" ]; then
@@ -1142,18 +1164,32 @@ jobs:
             # Extract just the filename without path and extension
             base_name=$(basename "$file" .drawio)
             
-            # Debug information
-            echo "Processing file: $file with base_name: $base_name"
+            # Extra debug information
+            echo "--------------------------------------------"
+            echo "AUTO-ID PROCESSING: $file"
+            echo "Base name: $base_name"
+            echo "File exists: $([ -f "$file" ] && echo "Yes" || echo "No")"
+            echo "File size: $(wc -c < "$file") bytes"
+            echo "--------------------------------------------"
             
             # Test each pattern (for debugging)
+            echo "Testing naming patterns:"
             if [[ "$base_name" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.\ .* ]]; then
-              echo "  Pattern 1 (X.Y.Z. Name) matches"
+              echo "✓ Pattern 1 (X.Y.Z. Name) matches: Complete ID with dot"
+            else
+              echo "✗ Pattern 1 (X.Y.Z. Name) does NOT match"
             fi
+            
             if [[ "$base_name" =~ ^[0-9]+\.[0-9]+\.\ .* ]]; then
-              echo "  Pattern 2 (X.Y. Name) matches"
+              echo "✓ Pattern 2 (X.Y. Name) matches: Partial ID with dot"
+            else
+              echo "✗ Pattern 2 (X.Y. Name) does NOT match"
             fi
+            
             if [[ "$base_name" =~ ^[0-9]+\.[0-9]+\ .* ]]; then
-              echo "  Pattern 3 (X.Y Name) matches"
+              echo "✓ Pattern 3 (X.Y Name) matches: Partial ID without dot - NEEDS AUTO-ID"
+            else
+              echo "✗ Pattern 3 (X.Y Name) does NOT match"
             fi
             
             # Check file patterns in order:
@@ -1172,6 +1208,8 @@ jobs:
               echo "File already has a partial ID with dot: $file (X.Y. Name format)"
               
             elif [[ "$base_name" =~ ^([0-9]+)\.([0-9]+)\ (.*) ]]; then
+              # THIS IS THE PATTERN THAT NEEDS AUTO-ID ASSIGNMENT
+              echo "✅ Found file that needs auto-ID assignment: $file"
               # Extract category and detail level, then combine for prefix
               CATEGORY="${BASH_REMATCH[1]}"
               DETAIL="${BASH_REMATCH[2]}"
@@ -1191,45 +1229,95 @@ jobs:
               HIGHEST_ID=0
               echo "Looking for existing diagrams with prefix $PREFIX..."
               
-              # Look for files matching the pattern X.Y.Z. format
+              # Safety check to avoid expanding to literal '*' if no files match
+              shopt -s nullglob
+              
+              # Look for files matching the pattern X.Y.Z. format with different variations
               for existing in drawio_files/*.drawio; do
+                [ -f "$existing" ] || continue
+                
                 existing_base=$(basename "$existing" .drawio)
                 echo "  Checking: $existing_base"
                 
-                # Match both X.Y.Z. format and X.Y.Z format (with or without trailing dot)
-                if [[ "$existing_base" =~ ^${PREFIX}\.([0-9]+)\.\ .* ]] || [[ "$existing_base" =~ ^${PREFIX}\.([0-9]+)\ .* ]]; then
+                # Pattern 1: X.Y.Z. Name format (with dot)
+                if [[ "$existing_base" =~ ^${PREFIX}\.([0-9]+)\.\ .* ]]; then
                   CURRENT_ID="${BASH_REMATCH[1]}"
-                  echo "    Found ID: $CURRENT_ID"
+                  echo "    ✓ Found ID: $CURRENT_ID (X.Y.Z. format)"
                   
                   if [[ "$CURRENT_ID" -gt "$HIGHEST_ID" ]]; then
                     HIGHEST_ID="$CURRENT_ID"
-                    echo "    New highest ID: $HIGHEST_ID"
+                    echo "    → New highest ID: $HIGHEST_ID"
+                  fi
+                  
+                # Pattern 2: X.Y.Z Name format (without dot)
+                elif [[ "$existing_base" =~ ^${PREFIX}\.([0-9]+)\ .* ]]; then
+                  CURRENT_ID="${BASH_REMATCH[1]}"
+                  echo "    ✓ Found ID: $CURRENT_ID (X.Y.Z format)"
+                  
+                  if [[ "$CURRENT_ID" -gt "$HIGHEST_ID" ]]; then
+                    HIGHEST_ID="$CURRENT_ID"
+                    echo "    → New highest ID: $HIGHEST_ID"
                   fi
                 fi
               done
               
+              # Reset shell option
+              shopt -u nullglob
+              
               echo "Highest existing ID found: $HIGHEST_ID"
+              
+              # Handle case where no existing IDs were found - start with 1
+              if [ "$HIGHEST_ID" -eq 0 ]; then
+                echo "No existing IDs found, starting with ID 1"
+              fi
               
               # Calculate next ID
               NEXT_ID=$((HIGHEST_ID + 1))
               
-              # Generate new filename
+              # Generate new filename with proper formatting
               NEW_NAME="${PREFIX}.${NEXT_ID}. ${NAME}"
               NEW_PATH="drawio_files/${NEW_NAME}.drawio"
               
               echo "Renaming: $file -> $NEW_PATH (next ID: $NEXT_ID)"
               
+              # Debug - verify files before moving
+              echo "Source file exists: $([ -f "$file" ] && echo "YES" || echo "NO")"
+              echo "Target directory exists: $([ -d "$(dirname "$NEW_PATH")" ] && echo "YES" || echo "NO")"
+              
               # First make sure the target directory exists
               mkdir -p $(dirname "$NEW_PATH")
               
-              # Use git mv for the rename, but handle errors
+              # Check if target file already exists (shouldn't happen but just in case)
+              if [ -f "$NEW_PATH" ]; then
+                echo "WARNING: Target file already exists: $NEW_PATH"
+                echo "Will use a unique name to avoid conflicts"
+                NEW_PATH="drawio_files/${PREFIX}.${NEXT_ID}.${RANDOM}. ${NAME}.drawio"
+                echo "New target path: $NEW_PATH"
+              fi
+              
+              # Try to do the actual rename now with multiple fallbacks
+              echo "Attempting to rename file..."
               if git mv -f "$file" "$NEW_PATH" 2>/dev/null; then
-                echo "Successfully renamed file with git mv"
+                echo "✅ Successfully renamed file with git mv"
               else
-                echo "git mv failed, trying regular mv and git add/rm"
-                mv -f "$file" "$NEW_PATH"
-                git rm -f "$file" 2>/dev/null || true
-                git add "$NEW_PATH"
+                echo "git mv failed, trying regular mv"
+                if cp "$file" "$NEW_PATH"; then
+                  echo "✅ Successfully copied file, now handling git"
+                  # Now update git
+                  git add "$NEW_PATH"
+                  git rm -f "$file" 2>/dev/null || true
+                else
+                  echo "❌ ERROR: Failed to rename file: $file"
+                  continue
+                fi
+              fi
+              
+              # Verify the rename was successful
+              if [ -f "$NEW_PATH" ]; then
+                echo "✅ File rename confirmed successful: $NEW_PATH exists"
+              else
+                echo "❌ ERROR: Renamed file doesn't exist: $NEW_PATH"
+                continue
               fi
               
               RENAMED_FILES+=("$NEW_PATH")
@@ -1256,28 +1344,39 @@ jobs:
           # Create timestamp for unique commit message
           TIMESTAMP=$(date +"%Y%m%d%H%M%S")
           
-          # Make sure all renamed files are staged
-          if [[ -n "${{ steps.auto_id.outputs.renamed_files }}" ]]; then
-            echo "Committing renamed files: ${{ steps.auto_id.outputs.renamed_files }}"
-            # Add specific files that were renamed
-            for file in ${{ steps.auto_id.outputs.renamed_files }}; do
-              git add "$file"
-            done
-          else
-            echo "No specific files to add, adding all changes"
-            git add .
-          fi
+          echo "Preparing to commit renamed files..."
+          
+          # First, let's check the state of the repository
+          echo "Current git status:"
+          git status
+          
+          # Add all potential renamed files
+          git add drawio_files/*.drawio
           
           # Check if there are really changes to commit
           if git diff --staged --quiet; then
             echo "No changes to commit after renaming."
             echo "commit_done=false" >> $GITHUB_OUTPUT
           else
-            git commit -m "Auto-assigned IDs to new diagrams [${TIMESTAMP}]"
+            echo "Changes detected, committing..."
+            
+            # Create a detailed commit message with the files that were renamed
+            COMMIT_MSG="Auto-assigned IDs to new diagrams [${TIMESTAMP}]"
+            RENAMED_FILES=$(git diff --staged --name-only | grep '\.drawio$' | tr '\n' ' ')
+            
+            if [ -n "$RENAMED_FILES" ]; then
+              COMMIT_MSG="${COMMIT_MSG} - Renamed: ${RENAMED_FILES}"
+            fi
+            
+            # Commit the changes
+            git commit -m "$COMMIT_MSG"
             echo "commit_done=true" >> $GITHUB_OUTPUT
             
+            # Push the changes
             echo "Pushing changes to remote repository..."
             git push origin HEAD:${GITHUB_REF#refs/heads/}
+            
+            echo "✅ Successfully committed and pushed renamed files"
           fi
       # Step 4: Detect and regenerate missing HTML/SVG files
       - name: Check for missing generated files
