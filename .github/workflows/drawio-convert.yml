@@ -1111,6 +1111,12 @@ jobs:
           if [ "$CHANGES_DETECTED" = true ]; then
             echo "files_changed=true" >> $GITHUB_OUTPUT
             echo ".drawio files were changed or found in this commit"
+            
+            # List the files that were changed/found for better debugging
+            echo "Changed or found .drawio files:"
+            git diff --name-only HEAD^ HEAD 2>/dev/null | grep "\.drawio$" || \
+            git diff-tree --no-commit-id --name-only -r HEAD 2>/dev/null | grep "\.drawio$" || \
+            find . -name "*.drawio" -type f | sort
           else
             echo "files_changed=false" >> $GITHUB_OUTPUT
             echo "No .drawio files were changed in this commit"
@@ -1192,29 +1198,91 @@ jobs:
               echo "✗ Pattern 3 (X.Y Name) does NOT match"
             fi
             
-            # Check file patterns in order:
-            # 1. Already has a full ID with dot (e.g., "3.1.4. SAP Overview")
-            # 2. Already has a full ID without dot (e.g., "3.1.4 SAP Overview")
-            # 3. Has a partial ID with dot (e.g., "3.1. SAP Overview")
-            # 4. Has a partial ID without dot (e.g., "3.1 SAP Overview") - this needs ID assignment
+            # Check file patterns in order using simplified approach
             
-            if [[ "$base_name" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.\ .* ]]; then
-              echo "File already has a complete ID: $file (X.Y.Z. Name format)"
-              
-            elif [[ "$base_name" =~ ^[0-9]+\.[0-9]+\.[0-9]+\ .* ]]; then
-              echo "File already has a complete ID: $file (X.Y.Z Name format)"
-              
-            elif [[ "$base_name" =~ ^[0-9]+\.[0-9]+\.\ .* ]]; then
-              echo "File already has a partial ID with dot: $file (X.Y. Name format)"
-              
-            elif [[ "$base_name" =~ ^([0-9]+)\.([0-9]+)\ (.*) ]]; then
-              # THIS IS THE PATTERN THAT NEEDS AUTO-ID ASSIGNMENT
-              echo "✅ Found file that needs auto-ID assignment: $file"
-              # Extract category and detail level, then combine for prefix
-              CATEGORY="${BASH_REMATCH[1]}"
-              DETAIL="${BASH_REMATCH[2]}"
-              PREFIX="${CATEGORY}.${DETAIL}"
-              NAME="${BASH_REMATCH[3]}"
+            # Extract first part (prefix) and rest (name)
+            PREFIX_PART=${base_name%% *}
+            NAME_PART=${base_name#* }
+            
+            # Debug
+            echo "  Prefix Part: '$PREFIX_PART'"
+            echo "  Name Part: '$NAME_PART'"
+            
+            # Patterns:
+            # 1. X.Y.Z. Name - already has full ID with dot
+            # 2. X.Y.Z Name - already has full ID without dot
+            # 3. X.Y. Name - already has partial ID with dot
+            # 4. X.Y Name - needs ID assignment (the pattern we're looking for)
+            
+            # Check if this is a file that needs ID assignment (X.Y Name format)
+            # It should have exactly one dot, two numbers, and no dot after second number
+            if [[ "$PREFIX_PART" == [0-9]*.[0-9]* && "$PREFIX_PART" != *. ]]; then
+              # Count dots to make sure there's exactly one
+              DOT_COUNT=$(echo "$PREFIX_PART" | tr -cd '.' | wc -c)
+              if [ "$DOT_COUNT" -eq 1 ]; then
+                echo "✅ Found file that needs auto-ID assignment: $file"
+                
+                # Simple extraction
+                CATEGORY=${PREFIX_PART%%.*}
+                DETAIL=${PREFIX_PART#*.}
+                PREFIX="$CATEGORY.$DETAIL"
+                NAME="$NAME_PART"
+                
+                # Debug extracted parts
+                echo "Extracted parts:"
+                echo "  Category: '$CATEGORY'"
+                echo "  Detail: '$DETAIL'"
+                echo "  Prefix: '$PREFIX'"
+                echo "  Name: '$NAME'"
+                
+                # Find highest existing ID for this prefix
+                HIGHEST_ID=0
+                echo "Looking for existing diagrams with prefix $PREFIX..."
+                
+                # Safety check to avoid expanding to literal '*' if no files match
+                shopt -s nullglob
+                
+                # Look for files matching the pattern X.Y.Z. format with different variations
+                for existing in drawio_files/*.drawio; do
+                  [ -f "$existing" ] || continue
+                  
+                  existing_base=$(basename "$existing" .drawio)
+                  
+                  # Pattern 1: X.Y.Z. Name format (with dot)
+                  if [[ "$existing_base" =~ ^${PREFIX}\.([0-9]+)\.\ .* ]]; then
+                    CURRENT_ID="${BASH_REMATCH[1]}"
+                    echo "    ✓ Found ID: $CURRENT_ID (X.Y.Z. format)"
+                    
+                    if [[ "$CURRENT_ID" -gt "$HIGHEST_ID" ]]; then
+                      HIGHEST_ID="$CURRENT_ID"
+                      echo "    → New highest ID: $HIGHEST_ID"
+                    fi
+                    
+                  # Pattern 2: X.Y.Z Name format (without dot)
+                  elif [[ "$existing_base" =~ ^${PREFIX}\.([0-9]+)\ .* ]]; then
+                    CURRENT_ID="${BASH_REMATCH[1]}"
+                    echo "    ✓ Found ID: $CURRENT_ID (X.Y.Z format)"
+                    
+                    if [[ "$CURRENT_ID" -gt "$HIGHEST_ID" ]]; then
+                      HIGHEST_ID="$CURRENT_ID"
+                      echo "    → New highest ID: $HIGHEST_ID"
+                    fi
+                  fi
+                done
+                
+                # Reset shell option
+                shopt -u nullglob
+                
+                echo "Highest existing ID found: $HIGHEST_ID"
+                
+                # Handle case where no existing IDs were found - start with 1
+                if [ "$HIGHEST_ID" -eq 0 ]; then
+                  echo "No existing IDs found, starting with ID 1"
+                fi
+                
+                # Calculate next ID
+                NEXT_ID=$((HIGHEST_ID + 1))
+                echo "Next ID: $NEXT_ID"
               
               echo "Matched pattern for file needing ID: $file"
               echo "  Category: $CATEGORY"

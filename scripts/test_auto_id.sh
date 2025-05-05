@@ -24,8 +24,8 @@ NAME="SAP Overview Test"
 echo "Select naming format for the test file:"
 echo "1) X.Y Name (recommended for auto-ID, like \"3.1 SAP Overview\")"
 echo "2) X.Y. Name (with dot, like \"3.1. SAP Overview\")"
-read -p "Selection [1]: " FORMAT_SELECTION
-FORMAT_SELECTION=${FORMAT_SELECTION:-1}
+# Default to option 1
+FORMAT_SELECTION=1
 
 # Create test file with appropriate naming pattern
 if [ "$FORMAT_SELECTION" = "1" ]; then

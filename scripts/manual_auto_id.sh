@@ -36,7 +36,16 @@ elif [[ "$base_name" =~ ^[0-9]+\.[0-9]+\.\ .* ]]; then
     echo "This format is considered already having an ID."
     exit 0
     
-elif [[ "$base_name" =~ ^([0-9]+)\.([0-9]+)\ (.*) ]]; then
+elecho "Testing regex directly on '$base_name'..."
+echo "Regex used: ^([0-9]+)\.([0-9]+)\ (.*)"
+echo "Base name length: ${#base_name} characters"
+
+# Convert to hex to see if there are any hidden characters
+echo -n "Hex representation: "
+echo -n "$base_name" | xxd -p
+
+# For very precise pattern matching
+if [[ "$base_name" =~ ^([0-9]+)\.([0-9]+)\ (.*) ]]; then
     echo "Pattern match: X.Y Name (needs ID assignment)"
     
     CATEGORY="${BASH_REMATCH[1]}"
@@ -49,6 +58,9 @@ elif [[ "$base_name" =~ ^([0-9]+)\.([0-9]+)\ (.*) ]]; then
     echo "  Detail: $DETAIL"
     echo "  Prefix: $PREFIX"
     echo "  Name: $NAME"
+    
+    # Debug info - show what exactly matched the regex
+    echo "Raw match: '${BASH_REMATCH[0]}'"
     
     # Find highest existing ID
     echo "Looking for existing diagrams with prefix $PREFIX..."
