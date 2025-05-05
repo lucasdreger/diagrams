@@ -20,9 +20,14 @@ Where:
 
 ## How to Use It
 
-1. Create a new Draw.io file using only the first two parts of the name:
+1. Create a new Draw.io file using only the first two parts of the name **without a trailing dot** after the second number:
    ```
-   3.1. SAP Overview.drawio
+   3.1 SAP Overview.drawio  ✅ (space after "3.1")
+   ```
+   
+   Note: Do NOT use this format with a dot after the second number:
+   ```
+   3.1. SAP Overview.drawio  ❌ (this won't trigger auto-ID)
    ```
 
 2. Commit and push this file
@@ -36,9 +41,19 @@ Where:
 
 ## Examples
 
-- You create: `1.2. Cloud Solution.drawio`
+- You create: `1.2 Cloud Solution.drawio` (note: no dot after "1.2")
 - If IDs 1, 2, and 3 already exist for "1.2." prefix:
 - System renames to: `1.2.4. Cloud Solution.drawio`
+
+## Naming Pattern Explained
+
+| Format | Example | Result |
+|--------|---------|--------|
+| `X.Y Z` | `3.1 SAP Overview.drawio` | ✅ Will be auto-assigned ID |
+| `X.Y. Z` | `3.1. SAP Overview.drawio` | ❌ Won't be auto-assigned ID |
+| `X.Y.Z. Z` | `3.1.4. SAP Overview.drawio` | ✓ Already has ID (no change) |
+
+The key difference is whether there is a dot (.) after the detail level number. The auto-ID system specifically looks for files that DON'T have this dot.
 
 ## Manual Testing
 

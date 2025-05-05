@@ -16,6 +16,29 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # Step 0: Diagnostic information
+      - name: Workflow diagnostic information
+        run: |
+          echo "============================================"
+          echo "WORKFLOW DIAGNOSTIC INFORMATION"
+          echo "============================================"
+          echo "Repository: ${{ github.repository }}"
+          echo "Branch: ${{ github.ref_name }}"
+          echo "Actor: ${{ github.actor }}"
+          echo "Workflow: ${{ github.workflow }}"
+          echo "Event: ${{ github.event_name }}"
+          echo "Commit: ${{ github.sha }}"
+          echo "============================================"
+          echo "LISTING DRAWIO FILES:"
+          find drawio_files -name "*.drawio" -type f | sort
+          echo "============================================"
+          echo "GIT STATUS:"
+          git status
+          echo "============================================"
+          echo "RECENTLY MODIFIED FILES:"
+          git diff --name-only HEAD~5 HEAD
+          echo "============================================"
+
       # Step 1: Check out the repository with history to detect changes
       - name: Check out the repository
         uses: actions/checkout@v3
@@ -1045,31 +1068,74 @@ jobs:
           RENAMED_FILES=()
           ID_ASSIGNED=false
           
+          # Get list of changed Draw.io files in this commit
+          echo "Checking for .drawio files changed in this commit..."
+          git diff --name-only HEAD^ HEAD
+          echo "Filtering for .drawio files..."
+          CHANGED_FILES=$(git diff --name-only HEAD^ HEAD | grep "\.drawio$" || echo "")
+          echo "Changed Draw.io files in this commit: $CHANGED_FILES"
+          
+          # Debug output
+          echo "Current directory: $(pwd)"
+          echo "Listing all .drawio files for reference:"
+          find . -name "*.drawio" -type f | sort
+          
           # Process each changed file to see if it needs ID assignment
-          for file in $(find drawio_files -name "*.drawio" -type f); do
+          for file in $CHANGED_FILES; do
             base_name=$(basename "$file" .drawio)
             
-            # Check if the file follows our partial naming pattern (e.g., "3.1. SAP Overview")
-            if [[ "$base_name" =~ ^[0-9]+\.[0-9]+\.\ .* ]]; then
-              echo "File already has a complete ID: $file"
-            elif [[ "$base_name" =~ ^([0-9]+\.[0-9]+)\.\ (.*) ]]; then
-              # Extract prefix (e.g., "3.1") and name (e.g., "SAP Overview")
-              PREFIX="${BASH_REMATCH[1]}"
-              NAME="${BASH_REMATCH[2]}"
+            # Debug pattern matching
+            echo "Processing file: $file with base_name: $base_name"
+            
+            # Check if the file follows our patterns:
+            # 1. Already has a full ID (e.g., "3.1.4. SAP Overview")
+            # 2. Has a partial ID with dot (e.g., "3.1. SAP Overview") - these are already handled
+            # 3. Has a partial ID without dot (e.g., "3.1 SAP Overview") - these need ID assignment
+            
+            if [[ "$base_name" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.\ .* ]]; then
+              echo "File already has a complete ID: $file (matches X.Y.Z. pattern)"
+              
+            elif [[ "$base_name" =~ ^[0-9]+\.[0-9]+\.\ .* ]]; then
+              echo "File already has a partial ID with dot: $file (matches X.Y. pattern)"
+              
+            elif [[ "$base_name" =~ ^([0-9]+)\.([0-9]+)\ (.*) ]]; then
+              # Extract category and detail level, then combine for prefix
+              CATEGORY="${BASH_REMATCH[1]}"
+              DETAIL="${BASH_REMATCH[2]}"
+              PREFIX="${CATEGORY}.${DETAIL}"
+              NAME="${BASH_REMATCH[3]}"
+              
+              echo "Matched pattern for file needing ID: $file"
+              echo "  Category: $CATEGORY"
+              echo "  Detail: $DETAIL"
+              echo "  Prefix: $PREFIX"
+              echo "  Name: $NAME"
               
               echo "Found file with partial ID: $file"
               echo "Prefix: $PREFIX, Name: $NAME"
               
               # Find highest existing ID for this prefix
               HIGHEST_ID=0
+              echo "Looking for existing diagrams with prefix $PREFIX..."
+              
+              # Look for files matching the pattern X.Y.Z. format
               for existing in drawio_files/*.drawio; do
                 existing_base=$(basename "$existing" .drawio)
-                if [[ "$existing_base" =~ ^${PREFIX}\.([0-9]+)\.\ .* ]]; then
-                  if [[ "${BASH_REMATCH[1]}" -gt "$HIGHEST_ID" ]]; then
-                    HIGHEST_ID="${BASH_REMATCH[1]}"
+                echo "  Checking: $existing_base"
+                
+                # Match both X.Y.Z. format and X.Y.Z format (with or without trailing dot)
+                if [[ "$existing_base" =~ ^${PREFIX}\.([0-9]+)\.\ .* ]] || [[ "$existing_base" =~ ^${PREFIX}\.([0-9]+)\ .* ]]; then
+                  CURRENT_ID="${BASH_REMATCH[1]}"
+                  echo "    Found ID: $CURRENT_ID"
+                  
+                  if [[ "$CURRENT_ID" -gt "$HIGHEST_ID" ]]; then
+                    HIGHEST_ID="$CURRENT_ID"
+                    echo "    New highest ID: $HIGHEST_ID"
                   fi
                 fi
               done
+              
+              echo "Highest existing ID found: $HIGHEST_ID"
               
               # Calculate next ID
               NEXT_ID=$((HIGHEST_ID + 1))
@@ -1080,10 +1146,18 @@ jobs:
               
               echo "Renaming: $file -> $NEW_PATH (next ID: $NEXT_ID)"
               
-              # Move the file
-              git config --global user.name "GitHub Actions"
-              git config --global user.email "actions@github.com"
-              git mv "$file" "$NEW_PATH"
+              # First make sure the target directory exists
+              mkdir -p $(dirname "$NEW_PATH")
+              
+              # Use git mv for the rename, but handle errors
+              if git mv -f "$file" "$NEW_PATH" 2>/dev/null; then
+                echo "Successfully renamed file with git mv"
+              else
+                echo "git mv failed, trying regular mv and git add/rm"
+                mv -f "$file" "$NEW_PATH"
+                git rm -f "$file" 2>/dev/null || true
+                git add "$NEW_PATH"
+              fi
               
               RENAMED_FILES+=("$NEW_PATH")
               ID_ASSIGNED=true
@@ -1100,12 +1174,38 @@ jobs:
       
       # Step 3.1: Commit the renamed diagrams if any
       - name: Commit renamed diagrams
+        id: commit_renamed
         if: ${{ steps.auto_id.outputs.id_assigned == 'true' }}
         run: |
-          git config --global user.name "GitHub Actions"
-          git config --global user.email "actions@github.com"
-          git commit -m "Auto-assigned IDs to new diagrams"
-          git push
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # Create timestamp for unique commit message
+          TIMESTAMP=$(date +"%Y%m%d%H%M%S")
+          
+          # Make sure all renamed files are staged
+          if [[ -n "${{ steps.auto_id.outputs.renamed_files }}" ]]; then
+            echo "Committing renamed files: ${{ steps.auto_id.outputs.renamed_files }}"
+            # Add specific files that were renamed
+            for file in ${{ steps.auto_id.outputs.renamed_files }}; do
+              git add "$file"
+            done
+          else
+            echo "No specific files to add, adding all changes"
+            git add .
+          fi
+          
+          # Check if there are really changes to commit
+          if git diff --staged --quiet; then
+            echo "No changes to commit after renaming."
+            echo "commit_done=false" >> $GITHUB_OUTPUT
+          else
+            git commit -m "Auto-assigned IDs to new diagrams [${TIMESTAMP}]"
+            echo "commit_done=true" >> $GITHUB_OUTPUT
+            
+            echo "Pushing changes to remote repository..."
+            git push origin HEAD:${GITHUB_REF#refs/heads/}
+          fi
       # Step 4: Detect and regenerate missing HTML/SVG files
       - name: Check for missing generated files
         id: check_missing

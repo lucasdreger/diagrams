@@ -2,7 +2,7 @@
 # test_auto_id.sh - Test the auto ID assignment for diagrams
 #
 # This script creates a test diagram file with a partial name pattern
-# and then uses the auto_id_diagram.sh script to assign an ID.
+# for testing the auto-ID functionality of the workflow.
 
 set -e
 
@@ -20,8 +20,9 @@ CATEGORY="3"  # 3 for SAP
 DETAIL="1"    # 1 for big landscape diagram
 NAME="SAP Overview Test"
 
-# Create a test diagram file (partial naming)
-TEST_FILE="drawio_files/${CATEGORY}.${DETAIL}. ${NAME} ${TIMESTAMP}.drawio"
+# IMPORTANT: Use the format "X.Y Name" (without dot after Y)
+# This matches the format that needs auto-ID assignment
+TEST_FILE="drawio_files/${CATEGORY}.${DETAIL} ${NAME} ${TIMESTAMP}.drawio"
 
 # Create a minimal valid Draw.io diagram file
 echo '<?xml version="1.0" encoding="UTF-8"?>
@@ -41,15 +42,64 @@ echo '<?xml version="1.0" encoding="UTF-8"?>
 
 echo "Created test diagram file: $TEST_FILE"
 
-# Add the file to git
-git add "$TEST_FILE"
-echo "Added to git for tracking."
+# Simulate what the GitHub workflow would do
+echo "Manual test of auto ID assignment..."
 
-# Now run the auto ID script
-echo "Running auto ID assignment script..."
-./scripts/auto_id_diagram.sh "$TEST_FILE"
+# Extract the base filename
+base_name=$(basename "$TEST_FILE" .drawio)
+echo "Base name: $base_name"
+
+# Extract category and detail
+if [[ "$base_name" =~ ^([0-9]+)\.([0-9]+)\ (.*) ]]; then
+  CATEGORY="${BASH_REMATCH[1]}"
+  DETAIL="${BASH_REMATCH[2]}"
+  PREFIX="${CATEGORY}.${DETAIL}"
+  NAME="${BASH_REMATCH[3]}"
+  
+  echo "Matched pattern:"
+  echo "  Category: $CATEGORY"
+  echo "  Detail: $DETAIL" 
+  echo "  Prefix: $PREFIX"
+  echo "  Name: $NAME"
+  
+  # Find highest existing ID
+  HIGHEST_ID=0
+  for existing in drawio_files/*.drawio; do
+    existing_base=$(basename "$existing" .drawio)
+    if [[ "$existing_base" =~ ^${PREFIX}\.([0-9]+)\.\ .* ]] || [[ "$existing_base" =~ ^${PREFIX}\.([0-9]+)\ .* ]]; then
+      CURRENT_ID="${BASH_REMATCH[1]}"
+      echo "Found existing file with ID $CURRENT_ID: $existing_base"
+      
+      if [[ "$CURRENT_ID" -gt "$HIGHEST_ID" ]]; then
+        HIGHEST_ID="$CURRENT_ID"
+      fi
+    fi
+  done
+  
+  echo "Highest existing ID: $HIGHEST_ID"
+  
+  # Calculate next ID
+  NEXT_ID=$((HIGHEST_ID + 1))
+  echo "Next ID: $NEXT_ID"
+  
+  # Generate new name
+  NEW_NAME="${PREFIX}.${NEXT_ID}. ${NAME}"
+  NEW_PATH="drawio_files/${NEW_NAME}.drawio"
+  
+  echo "Renaming: $TEST_FILE -> $NEW_PATH"
+  
+  # Rename the file
+  mv -f "$TEST_FILE" "$NEW_PATH"
+  
+  echo "✅ File renamed successfully to:"
+  echo "$NEW_PATH"
+else
+  echo "❌ Error: Filename doesn't match the expected pattern"
+  echo "Expected format: X.Y Name (without dot after Y)"
+  echo "Example: 3.1 SAP Overview"
+fi
 
 # Show what happened
 echo ""
-echo "Check the drawio_files directory to see the renamed file!"
-echo "The script has committed the change for you."
+echo "Note: This is just a manual test. In the actual workflow,"
+echo "the file would be committed and pushed automatically."
