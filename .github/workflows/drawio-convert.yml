@@ -16,7 +16,13 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # Step 0: Diagnostic information
+      # Step 1: Check out the repository with history to detect changes
+      - name: Check out the repository
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0 # Fetch all history to properly identify changed files
+          
+      # Step 1.1: Diagnostic information
       - name: Workflow diagnostic information
         run: |
           echo "============================================"
@@ -30,20 +36,14 @@ jobs:
           echo "Commit: ${{ github.sha }}"
           echo "============================================"
           echo "LISTING DRAWIO FILES:"
-          find drawio_files -name "*.drawio" -type f | sort
+          find drawio_files -name "*.drawio" -type f 2>/dev/null | sort || echo "No .drawio files found"
           echo "============================================"
           echo "GIT STATUS:"
           git status
           echo "============================================"
           echo "RECENTLY MODIFIED FILES:"
-          git diff --name-only HEAD~5 HEAD
+          git diff --name-only HEAD~5 HEAD 2>/dev/null || echo "Cannot get recent changes"
           echo "============================================"
-
-      # Step 1: Check out the repository with history to detect changes
-      - name: Check out the repository
-        uses: actions/checkout@v3
-        with:
-          fetch-depth: 0 # Fetch all history to properly identify changed files
 
       # Step 2: Install dependencies
       - name: Install Draw.io and dependencies
@@ -55,6 +55,12 @@ jobs:
           sudo apt-get -f install -y
           sudo dpkg -i drawio-amd64-26.2.2.deb || sudo apt-get -f install -y
           
+      # Step 1.2: Ensure directories exist
+      - name: Create required directories
+        run: |
+          mkdir -p drawio_files svg_files html_files
+          echo "Created necessary directories"
+
       # Step 2.5: Add .drawio extension to files without extension
       - name: Add .drawio extension to files without extension
         run: |
@@ -1049,11 +1055,43 @@ jobs:
       - name: Check for changed Draw.io files
         id: check_files
         run: |
-          # Check if any .drawio files have changed
-          if git diff --name-only HEAD^ HEAD | grep -q "\.drawio$"; then
+          echo "Checking for changed .drawio files..."
+          
+          # Initialize output
+          CHANGES_DETECTED=false
+          
+          # Method 1: Check for changes between HEAD and HEAD^
+          echo "Trying method 1: git diff HEAD^ HEAD"
+          if git diff --name-only HEAD^ HEAD 2>/dev/null | grep -q "\.drawio$"; then
+            CHANGES_DETECTED=true
+            echo "Changes detected using method 1"
+          fi
+          
+          # If method 1 failed, try method 2 (useful for initial commits)
+          if [ "$CHANGES_DETECTED" = false ]; then
+            echo "Trying method 2: git diff-tree (for initial commits)"
+            if git diff-tree --no-commit-id --name-only -r HEAD 2>/dev/null | grep -q "\.drawio$"; then
+              CHANGES_DETECTED=true
+              echo "Changes detected using method 2"
+            fi
+          fi
+          
+          # If still no changes detected, try method 3 (list all .drawio files on a new repo)
+          if [ "$CHANGES_DETECTED" = false ]; then
+            echo "Trying method 3: check for existence of any .drawio files"
+            if find . -name "*.drawio" -type f 2>/dev/null | grep -q "\.drawio$"; then
+              CHANGES_DETECTED=true
+              echo "Changes detected using method 3 (found .drawio files)"
+            fi
+          fi
+          
+          # Set the output
+          if [ "$CHANGES_DETECTED" = true ]; then
             echo "files_changed=true" >> $GITHUB_OUTPUT
+            echo ".drawio files were changed or found in this commit"
           else
             echo "files_changed=false" >> $GITHUB_OUTPUT
+            echo "No .drawio files were changed in this commit"
           fi
       # Step 3: Analyze and process new diagrams for auto ID assignment
       - name: Auto-assign IDs to new diagrams
@@ -1068,12 +1106,25 @@ jobs:
           RENAMED_FILES=()
           ID_ASSIGNED=false
           
-          # Get list of changed Draw.io files in this commit
-          echo "Checking for .drawio files changed in this commit..."
-          git diff --name-only HEAD^ HEAD
-          echo "Filtering for .drawio files..."
-          CHANGED_FILES=$(git diff --name-only HEAD^ HEAD | grep "\.drawio$" || echo "")
-          echo "Changed Draw.io files in this commit: $CHANGED_FILES"
+          # Get list of changed Draw.io files in this commit using multiple methods
+          echo "Getting list of .drawio files to process..."
+          
+          # Method 1: Standard diff (most commits)
+          CHANGED_FILES=$(git diff --name-only HEAD^ HEAD 2>/dev/null | grep "\.drawio$" || echo "")
+          
+          # Method 2: For initial commits
+          if [ -z "$CHANGED_FILES" ]; then
+            CHANGED_FILES=$(git diff-tree --no-commit-id --name-only -r HEAD 2>/dev/null | grep "\.drawio$" || echo "")
+            echo "Using diff-tree method for initial commit, found: $CHANGED_FILES"
+          fi
+          
+          # Method 3: For new repositories, check all .drawio files
+          if [ -z "$CHANGED_FILES" ]; then
+            CHANGED_FILES=$(find . -name "*.drawio" -type f | sed 's|^\./||' || echo "")
+            echo "Using find method for new repository, found: $CHANGED_FILES"
+          fi
+          
+          echo "Draw.io files to process: $CHANGED_FILES"
           
           # Debug output
           echo "Current directory: $(pwd)"
@@ -1082,21 +1133,43 @@ jobs:
           
           # Process each changed file to see if it needs ID assignment
           for file in $CHANGED_FILES; do
+            # Make sure the file exists (useful if we're parsing git output)
+            if [ ! -f "$file" ]; then
+              echo "File not found: $file, skipping..."
+              continue
+            fi
+            
+            # Extract just the filename without path and extension
             base_name=$(basename "$file" .drawio)
             
-            # Debug pattern matching
+            # Debug information
             echo "Processing file: $file with base_name: $base_name"
             
-            # Check if the file follows our patterns:
-            # 1. Already has a full ID (e.g., "3.1.4. SAP Overview")
-            # 2. Has a partial ID with dot (e.g., "3.1. SAP Overview") - these are already handled
-            # 3. Has a partial ID without dot (e.g., "3.1 SAP Overview") - these need ID assignment
+            # Test each pattern (for debugging)
+            if [[ "$base_name" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.\ .* ]]; then
+              echo "  Pattern 1 (X.Y.Z. Name) matches"
+            fi
+            if [[ "$base_name" =~ ^[0-9]+\.[0-9]+\.\ .* ]]; then
+              echo "  Pattern 2 (X.Y. Name) matches"
+            fi
+            if [[ "$base_name" =~ ^[0-9]+\.[0-9]+\ .* ]]; then
+              echo "  Pattern 3 (X.Y Name) matches"
+            fi
+            
+            # Check file patterns in order:
+            # 1. Already has a full ID with dot (e.g., "3.1.4. SAP Overview")
+            # 2. Already has a full ID without dot (e.g., "3.1.4 SAP Overview")
+            # 3. Has a partial ID with dot (e.g., "3.1. SAP Overview")
+            # 4. Has a partial ID without dot (e.g., "3.1 SAP Overview") - this needs ID assignment
             
             if [[ "$base_name" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.\ .* ]]; then
-              echo "File already has a complete ID: $file (matches X.Y.Z. pattern)"
+              echo "File already has a complete ID: $file (X.Y.Z. Name format)"
+              
+            elif [[ "$base_name" =~ ^[0-9]+\.[0-9]+\.[0-9]+\ .* ]]; then
+              echo "File already has a complete ID: $file (X.Y.Z Name format)"
               
             elif [[ "$base_name" =~ ^[0-9]+\.[0-9]+\.\ .* ]]; then
-              echo "File already has a partial ID with dot: $file (matches X.Y. pattern)"
+              echo "File already has a partial ID with dot: $file (X.Y. Name format)"
               
             elif [[ "$base_name" =~ ^([0-9]+)\.([0-9]+)\ (.*) ]]; then
               # Extract category and detail level, then combine for prefix

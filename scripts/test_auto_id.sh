@@ -20,9 +20,23 @@ CATEGORY="3"  # 3 for SAP
 DETAIL="1"    # 1 for big landscape diagram
 NAME="SAP Overview Test"
 
-# IMPORTANT: Use the format "X.Y Name" (without dot after Y)
-# This matches the format that needs auto-ID assignment
-TEST_FILE="drawio_files/${CATEGORY}.${DETAIL} ${NAME} ${TIMESTAMP}.drawio"
+# Get naming format from user
+echo "Select naming format for the test file:"
+echo "1) X.Y Name (recommended for auto-ID, like \"3.1 SAP Overview\")"
+echo "2) X.Y. Name (with dot, like \"3.1. SAP Overview\")"
+read -p "Selection [1]: " FORMAT_SELECTION
+FORMAT_SELECTION=${FORMAT_SELECTION:-1}
+
+# Create test file with appropriate naming pattern
+if [ "$FORMAT_SELECTION" = "1" ]; then
+  # Format "X.Y Name" (without dot after Y) - This should trigger auto-ID
+  TEST_FILE="drawio_files/${CATEGORY}.${DETAIL} ${NAME} ${TIMESTAMP}.drawio"
+  echo "Creating file with format X.Y Name (should trigger auto-ID)"
+else
+  # Format "X.Y. Name" (with dot after Y) - This will NOT trigger auto-ID
+  TEST_FILE="drawio_files/${CATEGORY}.${DETAIL}. ${NAME} ${TIMESTAMP}.drawio"
+  echo "Creating file with format X.Y. Name (will NOT trigger auto-ID)"
+fi
 
 # Create a minimal valid Draw.io diagram file
 echo '<?xml version="1.0" encoding="UTF-8"?>
