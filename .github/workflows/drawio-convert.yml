@@ -948,3 +948,210 @@ jobs:
           
           # Send the payload to Teams webhook
           curl -H "Content-Type: application/json" -d "$PAYLOAD" "${{ secrets.TEAMS_WEBHOOK }}"
+      # Step 2: Check for file changes
+      - name: Check for changed Draw.io files
+        id: check_files
+        run: |
+          # Check if any .drawio files have changed
+          if git diff --name-only HEAD^ HEAD | grep -q "\.drawio$"; then
+            echo "files_changed=true" >> $GITHUB_OUTPUT
+          else
+            echo "files_changed=false" >> $GITHUB_OUTPUT
+          fi
+      # Step 3: Analyze and process new diagrams for auto ID assignment
+      - name: Auto-assign IDs to new diagrams
+        id: auto_id
+        if: ${{ steps.check_files.outputs.files_changed == 'true' }}
+        run: |
+          # Initialize outputs
+          echo "id_assigned=false" >> $GITHUB_OUTPUT
+          echo "renamed_files=" >> $GITHUB_OUTPUT
+          
+          # Create a list to store renamed files
+          RENAMED_FILES=()
+          ID_ASSIGNED=false
+          
+          # Process each changed file to see if it needs ID assignment
+          for file in $(find drawio_files -name "*.drawio" -type f); do
+            base_name=$(basename "$file" .drawio)
+            
+            # Check if the file follows our partial naming pattern (e.g., "3.1. SAP Overview")
+            if [[ "$base_name" =~ ^[0-9]+\.[0-9]+\.\ .* ]]; then
+              echo "File already has a complete ID: $file"
+            elif [[ "$base_name" =~ ^([0-9]+\.[0-9]+)\.\ (.*) ]]; then
+              # Extract prefix (e.g., "3.1") and name (e.g., "SAP Overview")
+              PREFIX="${BASH_REMATCH[1]}"
+              NAME="${BASH_REMATCH[2]}"
+              
+              echo "Found file with partial ID: $file"
+              echo "Prefix: $PREFIX, Name: $NAME"
+              
+              # Find highest existing ID for this prefix
+              HIGHEST_ID=0
+              for existing in drawio_files/*.drawio; do
+                existing_base=$(basename "$existing" .drawio)
+                if [[ "$existing_base" =~ ^${PREFIX}\.([0-9]+)\.\ .* ]]; then
+                  if [[ "${BASH_REMATCH[1]}" -gt "$HIGHEST_ID" ]]; then
+                    HIGHEST_ID="${BASH_REMATCH[1]}"
+                  fi
+                fi
+              done
+              
+              # Calculate next ID
+              NEXT_ID=$((HIGHEST_ID + 1))
+              
+              # Generate new filename
+              NEW_NAME="${PREFIX}.${NEXT_ID}. ${NAME}"
+              NEW_PATH="drawio_files/${NEW_NAME}.drawio"
+              
+              echo "Renaming: $file -> $NEW_PATH (next ID: $NEXT_ID)"
+              
+              # Move the file
+              git config --global user.name "GitHub Actions"
+              git config --global user.email "actions@github.com"
+              git mv "$file" "$NEW_PATH"
+              
+              RENAMED_FILES+=("$NEW_PATH")
+              ID_ASSIGNED=true
+              
+              echo "Successfully renamed diagram with next available ID: $NEXT_ID"
+            fi
+          done
+          
+          # Set outputs
+          if [ "$ID_ASSIGNED" = true ]; then
+            echo "id_assigned=true" >> $GITHUB_OUTPUT
+            echo "renamed_files=${RENAMED_FILES[*]}" >> $GITHUB_OUTPUT
+          fi
+      
+      # Step 3.1: Commit the renamed diagrams if any
+      - name: Commit renamed diagrams
+        if: ${{ steps.auto_id.outputs.id_assigned == 'true' }}
+        run: |
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
+          git commit -m "Auto-assigned IDs to new diagrams"
+          git push
+      # Step 4: Detect and regenerate missing HTML/SVG files
+      - name: Check for missing generated files
+        id: check_missing
+        run: |
+          # Initialize variables to track if missing files were found
+          MISSING_HTML_FILES=false
+          MISSING_SVG_FILES=false
+          MISSING_FILES_LIST=""
+          
+          # Create these directories if they don't exist
+          mkdir -p svg_files html_files
+          
+          echo "Checking for Draw.io files without corresponding HTML or SVG files..."
+          for drawio_file in drawio_files/*.drawio; do
+            # Skip if no files match
+            [ -e "$drawio_file" ] || continue
+            
+            # Get the base name without extension
+            base_name=$(basename "$drawio_file" .drawio)
+            
+            # Check if HTML file exists
+            html_file="html_files/${base_name}.html"
+            if [ ! -f "$html_file" ]; then
+              echo "Missing HTML file for: $drawio_file"
+              MISSING_HTML_FILES=true
+              MISSING_FILES_LIST="${MISSING_FILES_LIST}${base_name} (HTML), "
+            fi
+            
+            # Check if SVG file exists
+            svg_file="svg_files/${base_name}.svg"
+            if [ ! -f "$svg_file" ]; then
+              echo "Missing SVG file for: $drawio_file"
+              MISSING_SVG_FILES=true
+              MISSING_FILES_LIST="${MISSING_FILES_LIST}${base_name} (SVG), "
+            fi
+            
+            # If either file is missing, add the drawio file to the queue for processing
+            if [ ! -f "$html_file" ] || [ ! -f "$svg_file" ]; then
+              echo "$drawio_file" >> /tmp/files_to_process.txt
+            fi
+          done
+          
+          # Trim trailing comma and space
+          MISSING_FILES_LIST="${MISSING_FILES_LIST%, }"
+          
+          # Set outputs for conditional steps
+          if [ "$MISSING_HTML_FILES" = true ] || [ "$MISSING_SVG_FILES" = true ]; then
+            echo "missing_files=true" >> $GITHUB_OUTPUT
+            echo "missing_files_list=$MISSING_FILES_LIST" >> $GITHUB_OUTPUT
+          else
+            echo "missing_files=false" >> $GITHUB_OUTPUT
+          fi
+      
+      # Step 4.1: Process missing files if any
+      - name: Regenerate missing files
+        if: ${{ steps.check_missing.outputs.missing_files == 'true' }}
+        run: |
+          echo "Regenerating missing HTML/SVG files..."
+          
+          # Create a function for processing the diagram files
+          process_missing_diagram() {
+            local file_to_process="$1"
+            echo "===== Processing missing files for: $file_to_process ====="
+            
+            # Get the base filename without extension, preserving spaces
+            local base_name=$(basename "$file_to_process" .drawio)
+            echo "Base name: $base_name"
+            
+            # Output files
+            local output_svg="svg_files/${base_name}.svg"
+            local output_html="html_files/${base_name}.html"
+            
+            # Only regenerate SVG if it's missing
+            if [ ! -f "$output_svg" ]; then
+              echo "Regenerating SVG file..."
+              # Convert to SVG using the standard approach
+              xvfb-run -a drawio -x -f svg -o "$output_svg" "$file_to_process"
+              
+              # Check if conversion succeeded
+              if [ ! -f "$output_svg" ]; then
+                echo "Warning: SVG generation failed for $file_to_process"
+                # Create a placeholder SVG
+                echo '<svg xmlns="http://www.w3.org/2000/svg" width="640" height="480" viewBox="0 0 640 480"><rect width="100%" height="100%" fill="#fff1f1"/><text x="50%" y="50%" font-family="Arial" font-size="16" text-anchor="middle">SVG Regeneration Failed</text><text x="50%" y="50%" font-family="Arial" font-size="12" text-anchor="middle" dy="20">Please update this diagram file</text></svg>' > "$output_svg"
+              fi
+            fi
+            
+            # Only regenerate HTML if it's missing
+            if [ ! -f "$output_html" ]; then
+              echo "Regenerating HTML file..."
+              echo '<!DOCTYPE html>' > "$output_html"
+              echo '<html lang="en">' >> "$output_html"
+              echo '<head>' >> "$output_html"
+              echo '  <meta charset="UTF-8">' >> "$output_html"
+              echo "  <title>${base_name}</title>" >> "$output_html"
+              echo '  <style>' >> "$output_html"
+              echo '    body { margin: 0; padding: 0; }' >> "$output_html"
+              echo '    svg { max-width: 100%; height: auto; display: block; }' >> "$output_html"
+              echo '  </style>' >> "$output_html"
+              echo '</head>' >> "$output_html"
+              echo '<body>' >> "$output_html"
+              
+              # If SVG exists, include it
+              if [ -f "$output_svg" ]; then
+                cat "$output_svg" >> "$output_html"
+              else
+                echo "<p>Error: SVG file not found for ${base_name}</p>" >> "$output_html"
+              fi
+              
+              echo '</body>' >> "$output_html"
+              echo '</html>' >> "$output_html"
+            fi
+            
+            echo "Completed regeneration of missing files for $file_to_process"
+          }
+          
+          # Process each file that has missing HTML or SVG
+          if [ -f "/tmp/files_to_process.txt" ]; then
+            while IFS= read -r file || [ -n "$file" ]; do
+              process_missing_diagram "$file"
+            done < "/tmp/files_to_process.txt"
+          fi
+          
+          echo "Finished regenerating all missing files"

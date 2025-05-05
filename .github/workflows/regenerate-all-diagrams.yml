@@ -1,0 +1,351 @@
+name: Regenerate All Draw.io Exports
+
+# This workflow can be triggered manually to regenerate all SVG and HTML files
+# from existing Draw.io diagrams, even if those diagrams haven't been changed.
+
+on:
+  # Allow manual triggering from the Actions tab
+  workflow_dispatch:
+    inputs:
+      regenerate_all:
+        description: 'Regenerate all diagram exports (SVG/HTML)'
+        required: true
+        default: 'true'
+        type: boolean
+      force_processing:
+        description: 'Force processing even if files exist (overwrite all)'
+        required: false
+        default: 'false'
+        type: boolean
+
+jobs:
+  regenerate:
+    runs-on: ubuntu-latest
+    
+    steps:
+      # Step 1: Check out the repository
+      - name: Checkout repository
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0  # Important to get full history for changelog
+
+      # Step 2: Set up Draw.io conversion tools
+      - name: Set up conversion tools
+        run: |
+          # Install required packages
+          sudo apt-get update
+          sudo apt-get install -y xvfb wget fonts-liberation libgbm1 libasound2
+          
+          # Install the Draw.io CLI
+          wget -O /tmp/drawio.deb https://github.com/jgraph/drawio-desktop/releases/download/v22.0.3/drawio-amd64-22.0.3.deb
+          sudo apt-get install -y /tmp/drawio.deb
+          
+          # Download the conversion script
+          cat > /tmp/convert-drawio.sh << 'EOL'
+          #!/bin/bash
+          # Script to convert Draw.io files to SVG
+          if [ "$#" -ne 2 ]; then
+            echo "Usage: $0 input.drawio output.svg"
+            exit 1
+          fi
+          INPUT="$1"
+          OUTPUT="$2"
+          drawio --export --format svg --output "$OUTPUT" "$INPUT"
+          EOL
+          
+          chmod +x /tmp/convert-drawio.sh
+
+      # Step 3: Set up virtual display
+      - name: Set up virtual display for headless operation
+        run: |
+          Xvfb :99 -screen 0 1280x1024x24 > /dev/null 2>&1 &
+          echo "DISPLAY=:99" >> $GITHUB_ENV
+
+      # Step 4: Process all Draw.io files
+      - name: Process all Draw.io files
+        id: process_files
+        run: |
+          # Create necessary directories
+          mkdir -p svg_files html_files
+          
+          # Initialize counter for processed files
+          PROCESSED_COUNT=0
+          SKIPPED_COUNT=0
+          FAILED_COUNT=0
+          
+          # Initialize file for processed files list
+          > /tmp/processed_files.txt
+          > /tmp/failed_files.txt
+          
+          # Function to process a single diagram file
+          process_diagram_file() {
+            local file_to_process="$1"
+            local force_mode="$2"
+            
+            echo "===== Processing: $file_to_process ====="
+            
+            # Skip if file doesn't exist
+            if [ ! -f "$file_to_process" ]; then
+              echo "File $file_to_process no longer exists, skipping."
+              return 1
+            fi
+            
+            # Basic validation
+            local file_size=$(stat -c%s "$file_to_process")
+            if [ "$file_size" -lt 100 ]; then
+              echo "WARNING: $file_to_process is extremely small ($file_size bytes). It may be corrupted."
+              if ! grep -q "<mxfile" "$file_to_process"; then
+                echo "ERROR: Not a valid Draw.io file. Skipping."
+                echo "$file_to_process" >> /tmp/failed_files.txt
+                return 1
+              fi
+            fi
+            
+            # Get base filename
+            local base_name=$(basename "$file_to_process" .drawio)
+            echo "Base name: $base_name"
+            
+            # Define output paths
+            local output_svg="svg_files/${base_name}.svg"
+            local output_html="html_files/${base_name}.html"
+            
+            # Check if outputs already exist and we're not in force mode
+            if [ "$force_mode" != "true" ] && [ -f "$output_svg" ] && [ -f "$output_html" ]; then
+              echo "SVG and HTML files already exist for $base_name, skipping."
+              echo "$file_to_process (Existing files skipped)" >> /tmp/processed_files.txt
+              return 0
+            fi
+            
+            # Check if this is likely a new empty diagram
+            local is_new_empty_diagram=false
+            if [ "$file_size" -lt 500 ] && grep -q "<diagram" "$file_to_process" && ! grep -q "<mxCell" "$file_to_process"; then
+              echo "This appears to be a new empty diagram. Will use special handling."
+              is_new_empty_diagram=true
+            fi
+            
+            # Convert to SVG
+            echo "Converting to SVG..."
+            
+            if [ "$is_new_empty_diagram" = true ]; then
+              # For empty diagrams, create a simple SVG directly
+              echo "Creating blank SVG for empty diagram..."
+              echo '<svg xmlns="http://www.w3.org/2000/svg" width="640" height="480" viewBox="0 0 640 480"><rect width="100%" height="100%" fill="white"/><text x="50%" y="50%" font-family="Arial" font-size="16" text-anchor="middle">Empty Diagram</text><text x="50%" y="52%" font-family="Arial" font-size="12" text-anchor="middle" dy="20">Ready for editing</text></svg>' > "$output_svg"
+            else
+              # Regular conversion for non-empty diagrams
+              # Try multiple methods with timeout
+              timeout 60s xvfb-run -a /tmp/convert-drawio.sh "$file_to_process" "$output_svg" 2>/tmp/conversion_error.log
+              
+              if [ ! -f "$output_svg" ] || [ ! -s "$output_svg" ]; then
+                echo "First conversion method failed. Trying alternative method..."
+                timeout 60s xvfb-run -a drawio -x -f svg -o "$output_svg" "$file_to_process" 2>>/tmp/conversion_error.log
+                
+                if [ ! -f "$output_svg" ] || [ ! -s "$output_svg" ]; then
+                  echo "Second conversion method failed. Trying with different display settings..."
+                  export DISPLAY=:0
+                  timeout 60s xvfb-run --server-args="-screen 0 1280x1024x24" drawio -x -f svg -o "$output_svg" "$file_to_process" 2>>/tmp/conversion_error.log
+                  
+                  if [ ! -f "$output_svg" ] || [ ! -s "$output_svg" ]; then
+                    echo "ERROR: All conversion methods failed for $file_to_process"
+                    echo "$file_to_process" >> /tmp/failed_files.txt
+                    return 1
+                  fi
+                fi
+              fi
+            fi
+            
+            echo "Successfully converted to SVG: $output_svg"
+            
+            # Create HTML wrapper
+            echo "Creating HTML wrapper..."
+            echo '<!DOCTYPE html>' > "$output_html"
+            echo '<html lang="en">' >> "$output_html"
+            echo '<head>' >> "$output_html"
+            echo '  <meta charset="UTF-8">' >> "$output_html"
+            echo "  <title>${base_name}</title>" >> "$output_html"
+            echo '  <meta name="viewport" content="width=device-width, initial-scale=1.0">' >> "$output_html"
+            echo '  <style>' >> "$output_html"
+            echo '    body { margin: 0; padding: 20px; font-family: Arial, sans-serif; }' >> "$output_html"
+            echo '    .container { max-width: 100%; overflow-x: auto; }' >> "$output_html"
+            echo '    svg { max-width: 100%; height: auto; display: block; }' >> "$output_html"
+            echo '    .header { margin-bottom: 20px; }' >> "$output_html"
+            echo '    .footer { margin-top: 20px; font-size: 12px; color: #666; }' >> "$output_html"
+            echo '  </style>' >> "$output_html"
+            echo '</head>' >> "$output_html"
+            echo '<body>' >> "$output_html"
+            echo '  <div class="header">' >> "$output_html"
+            echo "    <h1>${base_name}</h1>" >> "$output_html"
+            echo '  </div>' >> "$output_html"
+            echo '  <div class="container">' >> "$output_html"
+            cat "$output_svg" >> "$output_html"
+            echo '  </div>' >> "$output_html"
+            echo '  <div class="footer">' >> "$output_html"
+            echo "    <p>Last updated: $(date '+%Y-%m-%d %H:%M:%S')</p>" >> "$output_html"
+            echo '  </div>' >> "$output_html"
+            echo '</body>' >> "$output_html"
+            echo '</html>' >> "$output_html"
+            
+            echo "Successfully created HTML wrapper: $output_html"
+            
+            # Record processed file
+            echo "$file_to_process" >> /tmp/processed_files.txt
+            
+            return 0
+          }
+          
+          # Process all Draw.io files
+          echo "======================================="
+          echo "PROCESSING ALL DRAW.IO FILES"
+          echo "======================================="
+          
+          for file in drawio_files/*.drawio; do
+            if [ -f "$file" ]; then
+              if process_diagram_file "$file" "${{ inputs.force_processing }}"; then
+                PROCESSED_COUNT=$((PROCESSED_COUNT + 1))
+              else
+                if grep -q "$file" /tmp/failed_files.txt; then
+                  FAILED_COUNT=$((FAILED_COUNT + 1))
+                else
+                  SKIPPED_COUNT=$((SKIPPED_COUNT + 1))
+                fi
+              fi
+            fi
+          done
+          
+          # Update the changelog
+          echo "Regenerating CHANGELOG.csv..."
+          
+          # Create or update the CSV changelog
+          CHANGELOG_FILE="html_files/CHANGELOG.csv"
+          if [ ! -f "$CHANGELOG_FILE" ] || [ "${{ inputs.force_processing }}" = "true" ]; then
+            echo "Timestamp,Diagram,Action,Author,Commit" > "$CHANGELOG_FILE"
+          fi
+          
+          # Add entry for bulk regeneration
+          echo "$(date '+%Y-%m-%d %H:%M:%S'),All Diagrams,Bulk Regeneration,${{ github.actor }},${{ github.sha }}" >> "$CHANGELOG_FILE"
+          
+          # Output results
+          echo "======================================="
+          echo "REGENERATION COMPLETE"
+          echo "======================================="
+          echo "Processed: $PROCESSED_COUNT"
+          echo "Skipped: $SKIPPED_COUNT"
+          echo "Failed: $FAILED_COUNT"
+          
+          # Set outputs for next steps
+          echo "processed_count=$PROCESSED_COUNT" >> $GITHUB_OUTPUT
+          echo "failed_count=$FAILED_COUNT" >> $GITHUB_OUTPUT
+
+      # Step 5: Commit changes
+      - name: Commit and push changes
+        if: ${{ steps.process_files.outputs.processed_count > 0 }}
+        run: |
+          git config --local user.name "GitHub Actions"
+          git config --local user.email "actions@github.com"
+          
+          git add svg_files html_files
+          
+          # Check for changes
+          if git diff --staged --quiet; then
+            echo "No changes to commit."
+          else
+            PROCESSED_COUNT="${{ steps.process_files.outputs.processed_count }}"
+            git commit -m "Regenerated SVG and HTML files for $PROCESSED_COUNT diagrams"
+            git push
+          fi
+
+      # Step 6: Send notification
+      - name: Send Teams notification
+        if: ${{ always() }}
+        run: |
+          # Get counts
+          PROCESSED_COUNT="${{ steps.process_files.outputs.processed_count }}"
+          FAILED_COUNT="${{ steps.process_files.outputs.failed_count }}"
+          
+          # Try to get full name of the person who triggered the workflow
+          TRIGGERER_NAME="${{ github.actor }}"
+          if [ -n "${{ github.event.head_commit.author.name }}" ]; then
+            TRIGGERER_NAME="${{ github.event.head_commit.author.name }}"
+          fi
+          
+          # Set status
+          if [ "$PROCESSED_COUNT" -gt 0 ] && [ "$FAILED_COUNT" -eq 0 ]; then
+            STATUS="success"
+            TITLE="✅ Bulk Regeneration Completed Successfully"
+            COLOR="00B050"
+          elif [ "$PROCESSED_COUNT" -gt 0 ] && [ "$FAILED_COUNT" -gt 0 ]; then
+            STATUS="partial"
+            TITLE="⚠️ Bulk Regeneration Partially Successful"
+            COLOR="FFA500"
+          else
+            STATUS="failure"
+            TITLE="❌ Bulk Regeneration Failed"
+            COLOR="FF0000"
+          fi
+          
+          # Create JSON payload for Teams webhook
+          PAYLOAD=$(cat << EOF
+          {
+            "@type": "MessageCard",
+            "@context": "http://schema.org/extensions",
+            "themeColor": "$COLOR",
+            "summary": "Draw.io Bulk Regeneration Status",
+            "sections": [
+              {
+                "activityTitle": "$TITLE",
+                "activitySubtitle": "$(date +"%d.%m.%Y %H:%M:%S")",
+                "activityImage": "https://github.com/${{ github.actor }}.png?size=40",
+                "facts": [
+                  {
+                    "name": "Repository",
+                    "value": "${{ github.repository }}"
+                  },
+                  {
+                    "name": "Files Processed",
+                    "value": "$PROCESSED_COUNT"
+                  },
+                  {
+                    "name": "Files Failed",
+                    "value": "$FAILED_COUNT"
+                  },
+                  {
+                    "name": "Force Mode",
+                    "value": "${{ inputs.force_processing }}"
+                  },
+                  {
+                    "name": "Triggered by",
+                    "value": "$TRIGGERER_NAME"
+                  }
+                ],
+                "markdown": true,
+                "text": "📊 Bulk regeneration of diagram exports has completed.",
+                "attachments": [
+                  {
+                    "contentType": "reference",
+                    "contentUrl": "https://github.com/${{ github.repository }}/raw/${{ github.sha }}/html_files/CHANGELOG.csv",
+                    "name": "Diagram_Changelog.csv"
+                  }
+                ]
+              }
+            ],
+            "potentialAction": [
+              {
+                "@type": "OpenUri",
+                "name": "View Workflow Run",
+                "targets": [
+                  {
+                    "os": "default",
+                    "uri": "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                  }
+                ]
+              }
+            ]
+          }
+          EOF
+          )
+          
+          # Send the notification to Teams webhook (if webhook is configured)
+          if [ -n "${{ secrets.TEAMS_WEBHOOK }}" ]; then
+            curl -H "Content-Type: application/json" -d "$PAYLOAD" "${{ secrets.TEAMS_WEBHOOK }}"
+          else
+            echo "Teams webhook not configured, skipping notification."
+          fi

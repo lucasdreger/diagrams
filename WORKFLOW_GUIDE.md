@@ -82,6 +82,18 @@ Files with spaces in their names (e.g., "System Architecture - Version 2.drawio"
 5. **Commit Changes**: Commits the generated SVG/HTML files
 6. **Upload to SharePoint**: Uploads the changelog with complete metadata including commit hashes
 
+## Manual Regeneration
+
+The automatic workflow only processes diagrams that were changed in the current commit. If you need to regenerate all SVG and HTML files (for example, if some files were deleted or you want to update all files after a template change), you can use the manual regeneration workflow:
+
+1. Go to the **Actions** tab in the repository
+2. Select "Regenerate All Draw.io Exports" from the workflows list
+3. Click "Run workflow" and configure the options:
+   - Set "Force processing" to `true` if you want to overwrite existing files
+4. Click "Run workflow" to start the process
+
+This will process all diagrams in the repository, regardless of when they were last changed. See the [Manual Regeneration Guide](scripts/manual-regeneration-guide.md) for more details.
+
 ## Resolving Common Issues
 
 1. **File Not Being Converted**: If a file with spaces isn't being converted:
