@@ -133,6 +133,27 @@ jobs:
               return 1
             fi
             
+            # Validation but allow for empty new diagrams
+            echo "Validating Draw.io file format..."
+            local file_size=$(stat -c%s "$file_to_process" 2>/dev/null || stat -f%z "$file_to_process")
+            
+            # Check if it contains the basic XML structure
+            if ! grep -q "<mxfile" "$file_to_process"; then
+              echo "ERROR: $file_to_process is not a valid Draw.io file (missing <mxfile> tag)."
+              echo "File content preview:"
+              head -c 200 "$file_to_process" | cat -A
+              echo ""
+              echo "Adding to failed files list..."
+              echo "$file_to_process" >> /tmp/failed_files.txt
+              echo "Base name: $(basename "$file_to_process" .drawio) - Invalid file format" >> /tmp/failed_files_details.txt
+              return 4
+            fi
+            
+            # Small file size warning, but we'll still attempt conversion for new empty diagrams
+            if [ "$file_size" -lt 500 ]; then
+              echo "NOTE: $file_to_process is very small ($file_size bytes). This is normal for a new empty diagram."
+            fi
+            
             # Check if this file was actually changed in the current commit
             local was_changed=false
             
@@ -164,23 +185,67 @@ jobs:
             mkdir -p "svg_files" "html_files"
             local output_svg="svg_files/${base_name}.svg"
             
-            # Convert to SVG
-            echo "Converting to SVG..."
-            xvfb-run -a /tmp/convert-drawio.sh "$file_to_process" "$output_svg"
+            # Check if this is likely a new empty diagram
+            local is_new_empty_diagram=false
+            if [ "$file_size" -lt 500 ] && grep -q "<diagram" "$file_to_process" && ! grep -q "<mxCell" "$file_to_process"; then
+              echo "This appears to be a new empty diagram. Will use special handling."
+              is_new_empty_diagram=true
+            fi
             
-            # Check if conversion succeeded
-            if [ ! -f "$output_svg" ]; then
-              echo "First conversion method failed. Trying alternative method..."
-              xvfb-run -a drawio -x -f svg -o "$output_svg" "$file_to_process"
+            # Convert to SVG with improved error handling
+            echo "Converting to SVG..."
+            # Create a backup first in case we need to investigate failure
+            cp "$file_to_process" "${file_to_process}.backup" 2>/dev/null
+            
+            if [ "$is_new_empty_diagram" = true ]; then
+              # For empty diagrams, create a simple SVG directly
+              echo "Creating blank SVG for new empty diagram..."
+              echo '<svg xmlns="http://www.w3.org/2000/svg" width="640" height="480" viewBox="0 0 640 480"><rect width="100%" height="100%" fill="white"/><text x="50%" y="50%" font-family="Arial" font-size="16" text-anchor="middle">New Empty Diagram</text><text x="50%" y="52%" font-family="Arial" font-size="12" text-anchor="middle" dy="20">Ready for editing</text></svg>' > "$output_svg"
               
-              # If still failed, show more information
-              if [ ! -f "$output_svg" ]; then
-                echo "ERROR: Both conversion methods failed for $file_to_process"
-                echo "File info:"
-                ls -la "$file_to_process"
-                echo "Content preview:"
-                head -c 100 "$file_to_process" | hexdump -C
+              if [ -f "$output_svg" ]; then
+                echo "Successfully created SVG for new empty diagram"
+              else
+                echo "ERROR: Failed to create SVG file for new empty diagram"
                 return 1
+              fi
+            else
+              # Standard conversion process for non-empty diagrams
+              # Method 1: Try the main conversion script with timeout to avoid hanging
+              timeout 60s xvfb-run -a /tmp/convert-drawio.sh "$file_to_process" "$output_svg" 2>/tmp/conversion_error.log
+              
+              # Check if conversion succeeded
+              if [ ! -f "$output_svg" ]; then
+                echo "First conversion method failed. Trying alternative method..."
+                # Method 2: Try the direct drawio command
+                timeout 60s xvfb-run -a drawio -x -f svg -o "$output_svg" "$file_to_process" 2>>/tmp/conversion_error.log
+                
+                # Method 3: If still failed, try with different display settings
+                if [ ! -f "$output_svg" ]; then
+                  echo "Second conversion method failed. Trying with modified display settings..."
+                  export DISPLAY=:0
+                  timeout 60s xvfb-run --server-args="-screen 0 1280x1024x24" drawio -x -f svg -o "$output_svg" "$file_to_process" 2>>/tmp/conversion_error.log
+                
+                  # If all methods failed, record detailed diagnostic info
+                  if [ ! -f "$output_svg" ]; then
+                    echo "ERROR: All conversion methods failed for $file_to_process"
+                    echo "File info:"
+                    ls -la "$file_to_process"
+                    echo "Content preview:"
+                    head -c 200 "$file_to_process" | hexdump -C
+                    echo "Error log:"
+                    cat /tmp/conversion_error.log
+                    
+                    # Record this failure for notification
+                    echo "$file_to_process" >> /tmp/failed_files.txt
+                    echo "Base name: $base_name" >> /tmp/failed_files_details.txt
+                    
+                    # Create a minimal valid SVG so the workflow can continue
+                    echo '<svg xmlns="http://www.w3.org/2000/svg" width="640" height="480" viewBox="0 0 640 480"><rect width="100%" height="100%" fill="#ffffcc"/><text x="10" y="20" font-family="Arial" font-size="16">Error: Failed to convert diagram</text><text x="10" y="45" font-family="Arial" font-size="12">Please check the file and try again</text></svg>' > "$output_svg"
+                    
+                    echo "Created placeholder SVG to allow workflow to continue"
+                    return 1
+                  fi
+                fi
               fi
             fi
             
