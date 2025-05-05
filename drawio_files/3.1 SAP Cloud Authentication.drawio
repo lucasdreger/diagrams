@@ -223,6 +223,9 @@
         <mxCell id="bGBsD7gOS0OMBXqKMNli-74" value="S/4 HANA" style="text;strokeColor=none;fillColor=none;html=1;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=16;" vertex="1" parent="1">
           <mxGeometry x="1150" y="114" width="176" height="30" as="geometry" />
         </mxCell>
+        <mxCell id="bGBsD7gOS0OMBXqKMNli-125" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.75;exitY=1;exitDx=0;exitDy=0;" edge="1" parent="1" source="bGBsD7gOS0OMBXqKMNli-75" target="bGBsD7gOS0OMBXqKMNli-71">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
         <mxCell id="bGBsD7gOS0OMBXqKMNli-75" value="PR3" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#0070F2;strokeWidth=1.5;arcSize=16;fillColor=#ffffff;perimeterSpacing=0;absoluteArcSize=1;" vertex="1" parent="1">
           <mxGeometry x="1177" y="224.99999999999977" width="111" height="20" as="geometry" />
         </mxCell>
