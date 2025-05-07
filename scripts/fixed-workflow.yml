@@ -1,0 +1,257 @@
+name: Draw.io Diagrams Conversion
+
+on:
+  push:
+    paths:
+      - 'drawio_files/**'
+  workflow_dispatch:
+
+jobs:
+  convert:
+    runs-on: ubuntu-latest
+    
+    # Define environment variables
+    env:
+      DRAWIO_VERSION: "latest"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Required for git operations (history, etc.)
+      
+      - name: Setup Draw.io command line
+        run: |
+          echo "Setting up Draw.io CLI..."
+          sudo apt-get update
+          sudo apt-get install -y libxss1
+          sudo apt-get install -y --no-install-recommends xvfb
+          wget https://github.com/jgraph/drawio-desktop/releases/download/v22.0.3/drawio-amd64-22.0.3.deb
+          sudo apt-get install -y ./drawio-amd64-22.0.3.deb
+          
+          # Verify installation
+          drawio --version
+          
+          # Create output directories if they don't exist already
+          mkdir -p svg_files html_files
+
+      - name: Convert Draw.io files
+        run: |
+          process_diagram_file() {
+            # Get the input file path
+            local file_to_process="$1"
+            echo "Processing Draw.io file: $file_to_process"
+            
+            # Get the base name for output files
+            local base_name=$(basename "$file_to_process" .drawio)
+            echo "Base name: $base_name"
+            
+            # Set output file paths
+            local output_svg="svg_files/${base_name}.svg"
+            local output_html="html_files/${base_name}.html"
+            
+            # Check if the file is empty
+            if [ ! -s "$file_to_process" ]; then
+              echo "File is empty. Creating placeholder SVG and HTML."
+              # Create placeholder files for empty diagrams
+              echo '<svg xmlns="http://www.w3.org/2000/svg" width="640" height="480" viewBox="0 0 640 480"><rect width="100%" height="100%" fill="#f9f9f9"/><text x="50%" y="50%" font-family="Arial" font-size="18" text-anchor="middle">Empty Diagram</text></svg>' > "$output_svg"
+              echo '<!DOCTYPE html><html><head><title>Empty Diagram</title></head><body><h1>Empty Diagram</h1><p>This diagram file is empty.</p></body></html>' > "$output_html"
+            else
+              # Standard conversion process for non-empty diagrams
+              echo "Using comprehensive conversion script with fallbacks"
+              chmod +x ./scripts/complete_drawio_converter.sh
+              ./scripts/complete_drawio_converter.sh "$file_to_process" "$output_svg" 2>/tmp/conversion_error.log
+
+              # Check if conversion succeeded or the fallback was created
+              if [ -f "$output_svg" ] && [ -s "$output_svg" ]; then
+                echo "Successfully converted to SVG!"
+              else
+                echo "Error: All conversion methods failed and fallback could not be created"
+                echo "File info:"
+                ls -la "$file_to_process"
+                echo "Content preview:"
+                head -c 200 "$file_to_process" | hexdump -C
+                echo "Error log:"
+                cat /tmp/conversion_error.log
+              fi
+              
+              # Create HTML file
+              echo "Creating HTML file with the SVG content..."
+              echo '<!DOCTYPE html>' > "$output_html"
+              echo '<html lang="en">' >> "$output_html"
+              echo '<head>' >> "$output_html"
+              echo '  <meta charset="UTF-8">' >> "$output_html"
+              echo "  <title>${base_name}</title>" >> "$output_html"
+              echo '  <style>' >> "$output_html"
+              echo '    body { margin: 0; padding: 0; }' >> "$output_html"
+              echo '    svg { max-width: 100%; height: auto; display: block; }' >> "$output_html"
+              echo '  </style>' >> "$output_html"
+              echo '</head>' >> "$output_html"
+              echo '<body>' >> "$output_html"
+              cat "$output_svg" >> "$output_html"
+              echo '</body>' >> "$output_html"
+              echo '</html>' >> "$output_html"
+              
+              # Update CHANGELOG.csv
+              if [ -f "html_files/CHANGELOG.csv" ]; then
+                # Add changelog entry
+                update_changelog "$file_to_process" "$base_name"
+              else
+                # Create changelog if it doesn't exist
+                create_changelog
+                update_changelog "$file_to_process" "$base_name"
+              fi
+            fi
+            
+            echo "Finished processing $file_to_process"
+          }
+          
+          update_changelog() {
+            local file_to_process="$1"
+            local base_name="$2"
+            
+            # Format timestamp
+            local formatted_date=$(date +"%d.%m.%Y")
+            local formatted_time=$(date +"%H:%M:%S")
+            
+            # Get author and commit message
+            local author=$(git log -1 --format="%aN" -- "$file_to_process" 2>/dev/null || echo "${{ github.actor }}")
+            local commit_msg=$(git log -1 --format="%s" -- "$file_to_process" 2>/dev/null || echo "No commit message")
+            commit_msg=$(echo "$commit_msg" | sed 's/\"/\"\"/g')  # Escape quotes for CSV
+            
+            # Determine if new or modified
+            if git ls-files --error-unmatch "svg_files/${base_name}.svg" &>/dev/null; then
+              change_type="Modified"
+              local action_desc="Modified (Update)"
+            else
+              change_type="New"
+              local action_desc="New"
+            fi
+            
+            # Calculate version
+            local version="1.0"
+            if [ "$change_type" = "Modified" ]; then
+              # Count commits for this file to calculate version
+              local commit_count=$(git log --follow --pretty=format:"%h" -- "$file_to_process" | wc -l | tr -d ' ')
+              if [ "$commit_count" -gt 1 ]; then
+                local minor_version=$((commit_count - 1))
+                version="1.${minor_version}"
+              fi
+            fi
+            
+            # Get commit hash
+            local commit_hash=$(git log -1 --pretty=format:"%H" -- "$file_to_process" 2>/dev/null || echo "manual")
+            
+            # Get diagram ID if available in the filename
+            local diagram_id=""
+            if [[ "${base_name}" =~ \(ID\ ([0-9]+)\) ]]; then
+              diagram_id="${BASH_REMATCH[1]}"
+            fi
+            
+            # Check if CHANGELOG.csv has ID column
+            if ! grep -q "^Date,Time,User,Diagram,Action,File,Commit Message,Version,Commit Hash,ID$" "html_files/CHANGELOG.csv"; then
+              echo "Adding ID column to CHANGELOG.csv..."
+              # Create a temporary file with the new header and copy the rest
+              sed '1s/$/,ID/' "html_files/CHANGELOG.csv" > "html_files/CHANGELOG_new.csv"
+              mv "html_files/CHANGELOG_new.csv" "html_files/CHANGELOG.csv"
+            fi
+            
+            # Add changelog entry with ID
+            echo "$formatted_date,$formatted_time,\"$author\",\"${base_name}\",\"$action_desc\",\"$file_to_process\",\"$commit_msg\",$version,$commit_hash,$diagram_id" >> "html_files/CHANGELOG.csv"
+            
+            # Mark this file as processed to avoid duplicates
+            echo "$file_to_process" >> /tmp/processed_files.txt
+          }
+          
+          create_changelog() {
+            echo "Creating new CHANGELOG.csv..."
+            echo "Date,Time,User,Diagram,Action,File,Commit Message,Version,Commit Hash,ID" > "html_files/CHANGELOG.csv"
+          }
+          
+          # Set debug output to help troubleshoot
+          echo "Current directory: $(pwd)"
+          echo "Listing drawio_files directory:"
+          ls -la drawio_files || echo "drawio_files directory not found"
+          
+          # Get the list of changed .drawio files in the current commit
+          git diff --name-only HEAD^ HEAD 2>/dev/null | grep -E "\.drawio$" > /tmp/changed_files.txt || echo "" > /tmp/changed_files.txt
+
+          # If HEAD^ fails (first commit), try against empty tree
+          if [ ! -s /tmp/changed_files.txt ]; then
+            git diff-tree --name-only --no-commit-id --root -r HEAD | grep -E "\.drawio$" > /tmp/changed_files.txt || echo "" > /tmp/changed_files.txt
+          fi
+          
+          echo "Files changed in this commit:"
+          cat /tmp/changed_files.txt
+          
+          # Look for changed files with spaces
+          echo "Checking for changed files with spaces in their names..."
+          
+          > /tmp/files_with_spaces.txt
+          
+          # Process each file in changed_files.txt to find those with spaces
+          if [ -s /tmp/changed_files.txt ]; then
+            while IFS= read -r file; do
+              if [[ "$file" == *" "* ]]; then
+                echo "Found changed file with spaces: $file"
+                echo "$file" >> /tmp/files_with_spaces.txt
+              fi
+            done < /tmp/changed_files.txt
+          fi
+          
+          # Process any changed files with spaces first
+          if [ -s /tmp/files_with_spaces.txt ]; then
+            echo "========================================="
+            echo "PROCESSING CHANGED FILES WITH SPACES IN THEIR NAMES"
+            echo "========================================="
+            while IFS= read -r space_file || [ -n "$space_file" ]; do
+              echo "Processing changed file with spaces: $space_file"
+              process_diagram_file "$space_file"
+            done < /tmp/files_with_spaces.txt
+          else
+            echo "No changed files with spaces detected in this commit."
+          fi
+
+          # Now process remaining changed files (skipping those with spaces that were already processed)
+          echo "========================================="
+          echo "PROCESSING REMAINING CHANGED FILES"
+          echo "========================================="
+          
+          # Create a temporary file for files without spaces
+          > /tmp/files_without_spaces.txt
+          
+          # Filter out files that were already processed (those with spaces)
+          while IFS= read -r changed_file || [ -n "$changed_file" ]; do
+            # Skip files with spaces since they've already been processed
+            if [[ "$changed_file" != *" "* ]]; then
+              echo "$changed_file" >> /tmp/files_without_spaces.txt
+            fi
+          done < /tmp/changed_files.txt
+          
+          # Read line by line to process files without spaces
+          while IFS= read -r changed_file || [ -n "$changed_file" ]; do
+            # Use our dedicated function to process the file
+            echo "Processing file without spaces: $changed_file"
+            process_diagram_file "$changed_file"
+          done < /tmp/files_without_spaces.txt
+
+      - name: Commit and push changes
+        id: commit_changes
+        run: |
+          git config --local user.name "github-actions[bot]"
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # Add our changes
+          git add svg_files html_files
+          
+          # Only commit if there are changes
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+            echo "changes_made=false" >> $GITHUB_OUTPUT
+          else
+            git commit -m "Auto-converted draw.io files"
+            
+            # Push the changes
+            git push "https://${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" HEAD:${GITHUB_REF#refs/heads/}
+            echo "changes_made=true" >> $GITHUB_OUTPUT
+          fi

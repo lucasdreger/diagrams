@@ -1,0 +1,17 @@
+              # Standard conversion process for non-empty diagrams
+              echo "Using comprehensive conversion script with fallbacks"
+              chmod +x ./scripts/complete_drawio_converter.sh
+              ./scripts/complete_drawio_converter.sh "$file_to_process" "$output_svg" 2>/tmp/conversion_error.log
+
+              # Check if conversion succeeded or the fallback was created
+              if [ -f "$output_svg" ] && [ -s "$output_svg" ]; then
+                echo "Successfully converted to SVG!"
+              else
+                echo "Error: All conversion methods failed and fallback could not be created"
+                echo "File info:"
+                ls -la "$file_to_process"
+                echo "Content preview:"
+                head -c 200 "$file_to_process" | hexdump -C
+                echo "Error log:"
+                cat /tmp/conversion_error.log
+              fi

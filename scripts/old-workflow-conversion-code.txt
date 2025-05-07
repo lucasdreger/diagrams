@@ -1,0 +1,57 @@
+              # Check if conversion succeeded
+              if [ ! -f "$output_svg" ] || [ ! -s "$output_svg" ]; then
+                echo "First conversion method failed. Trying alternative method..."
+                # Method 2: Try the direct drawio command with -x flag
+                echo "Trying conversion method 2: drawio command with -x flag"
+                timeout 90s xvfb-run --server-args="-screen 0 1280x1024x24" drawio -x -f svg -o "$output_svg" "$file_to_process" 2>>/tmp/conversion_error.log
+                
+                # Method 3: Try with different display settings
+                if [ ! -f "$output_svg" ] || [ ! -s "$output_svg" ]; then
+                  echo "Second conversion method failed. Trying method 3 with modified display settings..."
+                  export DISPLAY=:0
+                  timeout 60s xvfb-run --server-args="-screen 0 1280x1024x24" drawio -x -f svg -o "$output_svg" "$file_to_process" 2>>/tmp/conversion_error.log
+                
+                  # Method 4: Try direct export parameter
+                  if [ ! -f "$output_svg" ] || [ ! -s "$output_svg" ]; then
+                    echo "Third conversion method failed. Trying method 4 with --export parameter..."
+                    timeout 60s xvfb-run --server-args="-screen 0 1280x1024x24" drawio --export --format svg --output="$output_svg" "$file_to_process" 2>>/tmp/conversion_error.log
+                    
+                    # Method 5: Try XML extraction fallback
+                    if [ ! -f "$output_svg" ] || [ ! -s "$output_svg" ]; then
+                      echo "Fourth conversion method failed. Trying method 5 with XML extraction..."
+                      
+                      # Copy our extraction script to temp directory
+                      cp ./scripts/extract_svg.sh /tmp/extract_svg.sh
+                      chmod +x /tmp/extract_svg.sh
+                      # Script should be ready to use now
+                      
+                      # Try using the script
+                      if ! /tmp/extract_svg.sh "$file_to_process" "$output_svg"; then
+                        # If all methods failed, create a nicer fallback SVG
+                        if [ ! -f "$output_svg" ] || [ ! -s "$output_svg" ]; then
+                          echo "All conversion methods failed for $file_to_process"
+                          echo "File info:"
+                          ls -la "$file_to_process"
+                          echo "Content preview:"
+                          head -c 200 "$file_to_process" | hexdump -C
+                          echo "Error log:"
+                          cat /tmp/conversion_error.log
+                          
+                          # Record this failure for notification
+                          echo "$file_to_process" >> /tmp/failed_files.txt
+                          echo "Base name: $base_name" >> /tmp/failed_files_details.txt
+                          
+                          # Create a better looking fallback SVG using our script
+                          cp ./scripts/create_fallback_svg.sh /tmp/create_fallback_svg.sh
+                          chmod +x /tmp/create_fallback_svg.sh
+                          /tmp/create_fallback_svg.sh "$output_svg" "$base_name"
+                          
+                          echo "Created better-looking fallback SVG to allow workflow to continue"
+                          # We return success so the workflow can continue
+                          # but the SVG will indicate there was a conversion issue
+                        fi
+                      fi
+                    fi
+                  fi
+                fi
+              fi
