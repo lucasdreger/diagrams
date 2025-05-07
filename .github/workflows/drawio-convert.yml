@@ -7,6 +7,11 @@ on:
       - 'drawio_files/**'
   workflow_dispatch: # Enable manual triggering
 
+# Add concurrency control to prevent queued workflows and resolve XKEYBOARD issues
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.sha }}
+  cancel-in-progress: false
+
 # Add permissions needed for the workflow
 permissions:
   contents: write
@@ -128,17 +133,46 @@ jobs:
       # Step 4: Convert .drawio files to SVG and wrap them in HTML
       - name: Convert Draw.io files
         run: |
-          # Set up virtual display for headless operation
-          Xvfb :99 -screen 0 1024x768x16 &
+          # Set up virtual display for headless operation with improved configuration
+          # Skip keyboard setup to avoid XKEYBOARD errors
+          mkdir -p /tmp/.X11-unix
+          Xvfb :99 -screen 0 1280x1024x24 -nolisten tcp -ac +extension RANDR +render -noreset -noxkbmap &
+          XVFB_PID=$!
           export DISPLAY=:99
-          sleep 1 # Give Xvfb time to start
+          sleep 2 # Give Xvfb more time to start
 
-          # Use a different approach - temporary script
+          # Verify Xvfb is running
+          if ! ps -p $XVFB_PID > /dev/null; then
+            echo "⚠️ Xvfb failed to start, trying alternative configuration..."
+            # Try a different approach with auto-servernum
+            xvfb-run --auto-servernum --server-args="-screen 0 1280x1024x24" echo "Testing Xvfb" || echo "Warning: xvfb-run test failed but continuing"
+          else
+            echo "✅ Xvfb started successfully with PID $XVFB_PID"
+          fi
+
+          # Create an enhanced converter script with better error handling
           cat > /tmp/convert-drawio.sh << 'EOL'
           #!/bin/bash
           input_file=$1
           output_file=$2
-          drawio -x -f svg -o "$output_file" "$input_file"
+          echo "Starting conversion of $input_file to $output_file"
+          
+          # First try with direct command
+          if drawio -x -f svg -o "$output_file" "$input_file"; then
+            echo "Conversion successful with direct command"
+            exit 0
+          fi
+          
+          # Second try with xvfb-run if direct command failed
+          echo "Trying with xvfb-run..."
+          if xvfb-run --auto-servernum --server-args="-screen 0 1280x1024x24" drawio -x -f svg -o "$output_file" "$input_file"; then
+            echo "Conversion successful with xvfb-run"
+            exit 0
+          fi
+          
+          # Third try with different arguments
+          echo "Trying with different arguments..."
+          xvfb-run --auto-servernum --server-args="-screen 0 1280x1024x24 -noxkbmap" drawio -x -f svg -o "$output_file" "$input_file"
           EOL
           chmod +x /tmp/convert-drawio.sh
 

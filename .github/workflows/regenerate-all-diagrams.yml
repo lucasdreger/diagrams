@@ -18,6 +18,11 @@ on:
         default: 'false'
         type: boolean
 
+# Add concurrency control to prevent queued workflows and resolve XKEYBOARD issues
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.sha }}
+  cancel-in-progress: false
+
 jobs:
   regenerate:
     runs-on: ubuntu-latest
