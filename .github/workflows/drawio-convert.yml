@@ -133,453 +133,128 @@ jobs:
       # Step 4: Convert .drawio files to SVG and wrap them in HTML
       - name: Convert Draw.io files
         run: |
-          # Set up virtual display for headless operation with improved configuration
-          # Use standard Xvfb options to avoid XKEYBOARD errors
+          # Set up virtual display for headless operation
           mkdir -p /tmp/.X11-unix
           Xvfb :99 -screen 0 1280x1024x24 -nolisten tcp -ac +extension RANDR +render -noreset &
           XVFB_PID=$!
           export DISPLAY=:99
-          sleep 2 # Give Xvfb more time to start
-
+          sleep 2 # Give Xvfb time to start
+          
           # Verify Xvfb is running
           if ! ps -p $XVFB_PID > /dev/null; then
             echo "⚠️ Xvfb failed to start, trying alternative configuration..."
-            # Try a different approach with auto-servernum
             xvfb-run --auto-servernum --server-args="-screen 0 1280x1024x24" echo "Testing Xvfb" || echo "Warning: xvfb-run test failed but continuing"
           else
             echo "✅ Xvfb started successfully with PID $XVFB_PID"
           fi
-
-          # Create an enhanced converter script with better error handling
+          
+          # Create a simple converter script
           cat > /tmp/convert-drawio.sh << 'EOL'
           #!/bin/bash
           input_file=$1
           output_file=$2
-          echo "Starting conversion of $input_file to $output_file"
+          echo "Converting: $input_file to $output_file"
           
-          # First try with direct command
+          # Try direct command first
           if drawio -x -f svg -o "$output_file" "$input_file"; then
-            echo "Conversion successful with direct command"
             exit 0
           fi
           
-          # Second try with xvfb-run if direct command failed
-          echo "Trying with xvfb-run..."
-          if xvfb-run --auto-servernum --server-args="-screen 0 1280x1024x24" drawio -x -f svg -o "$output_file" "$input_file"; then
-            echo "Conversion successful with xvfb-run"
-            exit 0
-          fi
-          
-          # Third try with minimal arguments
-          echo "Trying with minimal arguments..."
+          # Try with xvfb-run as fallback
           xvfb-run --auto-servernum --server-args="-screen 0 1280x1024x24" drawio -x -f svg -o "$output_file" "$input_file"
           EOL
           chmod +x /tmp/convert-drawio.sh
-
-          # Create a file to track processed files to avoid duplicates
+          
+          # Track processed files
           > /tmp/processed_files.txt
+          > /tmp/failed_files.txt
           
-          # Function to safely process filenames with spaces
-          process_diagram_file() {
-            local file_to_process="$1"
-            echo "===== Processing: $file_to_process ====="
-            
-            # Check if this file has already been processed
-            if grep -q "^$file_to_process\$" /tmp/processed_files.txt; then
-              echo "File $file_to_process has already been processed in this run, skipping."
-              return 3
-            fi
-            
-            # Skip if file doesn't exist
-            if [ ! -f "$file_to_process" ]; then
-              echo "File $file_to_process no longer exists, skipping."
-              return 1
-            fi
-            
-            # Validation but allow for empty new diagrams
-            echo "Validating Draw.io file format..."
-            local file_size=$(stat -c%s "$file_to_process" 2>/dev/null || stat -f%z "$file_to_process")
-            
-            # Check if it contains the basic XML structure
-            if ! grep -q "<mxfile" "$file_to_process"; then
-              echo "ERROR: $file_to_process is not a valid Draw.io file (missing <mxfile> tag)."
-              echo "File content preview:"
-              head -c 200 "$file_to_process" | cat -A
-              echo ""
-              echo "Adding to failed files list..."
-              echo "$file_to_process" >> /tmp/failed_files.txt
-              echo "Base name: $(basename "$file_to_process" .drawio) - Invalid file format" >> /tmp/failed_files_details.txt
-              return 4
-            fi
-            
-            # Small file size warning, but we'll still attempt conversion for new empty diagrams
-            if [ "$file_size" -lt 500 ]; then
-              echo "NOTE: $file_to_process is very small ($file_size bytes). This is normal for a new empty diagram."
-            fi
-            
-            # Check if this file was actually changed in the current commit
-            local was_changed=false
-            
-            # Method 1: Check changed files list
-            grep -q "^$file_to_process\$" /tmp/changed_files.txt && was_changed=true
-            
-            # Method 2: Direct git diff check (backup if grep fails due to special chars)
-            if [ "$was_changed" = false ]; then
-              git diff --name-only HEAD^ HEAD 2>/dev/null | grep -q "^$file_to_process\$" && was_changed=true
-            fi
-            
-            # Special case for first commit or files specifically targeted
-            if [ ! -s /tmp/changed_files.txt ] || grep -q "^$file_to_process\$" /tmp/files_with_spaces.txt; then
-              was_changed=true
-            fi
-            
-            if [ "$was_changed" = false ]; then
-              echo "File $file_to_process was not changed in this commit, skipping."
-              return 2
-            fi
-            
-            echo "Confirmed $file_to_process was changed in this commit. Processing..."
-            
-            # Get the base filename without extension, preserving spaces
-            local base_name=$(basename "$file_to_process" .drawio)
-            echo "Base name: $base_name"
-            
-            # Create output directories if they don't exist
-            mkdir -p "svg_files" "html_files"
-            local output_svg="svg_files/${base_name}.svg"
-            
-            # Check if this is likely a new empty diagram - use more relaxed criteria
-            local is_new_empty_diagram=false
-            if [ "$file_size" -lt 1000 ]; then
-              # First case: Very small file that's definitely a new diagram
-              if [ "$file_size" -lt 500 ] && ! grep -q "<mxCell.*value=" "$file_to_process"; then
-                echo "This appears to be a new empty diagram (very small size). Will use special handling."
-                is_new_empty_diagram=true
-              # Second case: Small file that might be empty but has slightly more data
-              elif grep -q "<diagram" "$file_to_process" && ! grep -q "<mxCell.*value=" "$file_to_process"; then
-                echo "This appears to be an empty or minimal diagram. Will use special handling."
-                is_new_empty_diagram=true
-              else
-                echo "File is small but has content. Will attempt normal conversion."
-              fi
-            fi
-            
-            # Convert to SVG with improved error handling
-            echo "Converting to SVG..."
-            # Create a backup first in case we need to investigate failure
-            cp "$file_to_process" "${file_to_process}.backup" 2>/dev/null
-            
-            if [ "$is_new_empty_diagram" = true ]; then
-              # For empty diagrams, create a simple SVG directly
-              echo "Creating blank SVG for new empty diagram..."
-              # Extract the diagram name from the file for a personalized message
-              DIAGRAM_NAME=$(basename "$file_to_process" .drawio)
-              echo '<svg xmlns="http://www.w3.org/2000/svg" width="800" height="600" viewBox="0 0 800 600">
-                <rect width="100%" height="100%" fill="white"/>
-                <text x="50%" y="45%" font-family="Arial" font-size="20" text-anchor="middle" fill="#333333">'"${DIAGRAM_NAME}"'</text>
-                <text x="50%" y="50%" font-family="Arial" font-size="16" text-anchor="middle" fill="#666666">New Diagram - Ready for Editing</text>
-                <text x="50%" y="55%" font-family="Arial" font-size="12" text-anchor="middle" fill="#888888">This is an empty diagram template. Open the original .drawio file to edit.</text>
-              </svg>' > "$output_svg"
-              
-              if [ -f "$output_svg" ]; then
-                echo "Successfully created SVG for new empty diagram"
-              else
-                echo "ERROR: Failed to create SVG file for new empty diagram"
-                return 1
-              fi
-            else
-              # Prepare the display for conversion
-              export DISPLAY=:99
-              Xvfb :99 -screen 0 1280x1024x24 > /dev/null 2>&1 &
-              sleep 1
-                            
-              # Standard conversion process for non-empty diagrams
-              echo "Trying conversion method 1: convert-drawio.sh script"
-              timeout 90s xvfb-run --server-args="-screen 0 1280x1024x24" /tmp/convert-drawio.sh "$file_to_process" "$output_svg" 2>/tmp/conversion_error.log
-              
-              # Check if conversion succeeded
-              if [ ! -f "$output_svg" ] || [ ! -s "$output_svg" ]; then
-                echo "First conversion method failed. Trying alternative method..."
-                # Method 2: Try the direct drawio command
-                echo "Trying conversion method 2: drawio command with -x flag"
-                timeout 90s xvfb-run --server-args="-screen 0 1280x1024x24" drawio -x -f svg -o "$output_svg" "$file_to_process" 2>>/tmp/conversion_error.log
-                
-                # Method 3: If still failed, try with different display settings
-                if [ ! -f "$output_svg" ]; then
-                  echo "Second conversion method failed. Trying with modified display settings..."
-                  export DISPLAY=:0
-                  timeout 60s xvfb-run --server-args="-screen 0 1280x1024x24" drawio -x -f svg -o "$output_svg" "$file_to_process" 2>>/tmp/conversion_error.log
-                
-                  # If all methods failed, record detailed diagnostic info
-                  if [ ! -f "$output_svg" ]; then
-                    echo "ERROR: All conversion methods failed for $file_to_process"
-                    echo "File info:"
-                    ls -la "$file_to_process"
-                    echo "Content preview:"
-                    head -c 200 "$file_to_process" | hexdump -C
-                    echo "Error log:"
-                    cat /tmp/conversion_error.log
-                    
-                    # Record this failure for notification
-                    echo "$file_to_process" >> /tmp/failed_files.txt
-                    echo "Base name: $base_name" >> /tmp/failed_files_details.txt
-                    
-                    # Create a minimal valid SVG so the workflow can continue
-                    echo '<svg xmlns="http://www.w3.org/2000/svg" width="640" height="480" viewBox="0 0 640 480"><rect width="100%" height="100%" fill="#ffffcc"/><text x="10" y="20" font-family="Arial" font-size="16">Error: Failed to convert diagram</text><text x="10" y="45" font-family="Arial" font-size="12">Please check the file and try again</text></svg>' > "$output_svg"
-                    
-                    echo "Created placeholder SVG to allow workflow to continue"
-                    return 1
-                  fi
-                fi
-              fi
-            fi
-            
-            echo "Successfully converted to SVG!"
-            
-            # Create HTML wrapper
-            echo "Creating HTML wrapper..."
-            local output_html="html_files/${base_name}.html"
-            echo '<!DOCTYPE html>' > "$output_html"
-            echo '<html lang="en">' >> "$output_html"
-            echo '<head>' >> "$output_html"
-            echo '  <meta charset="UTF-8">' >> "$output_html"
-            echo "  <title>${base_name}</title>" >> "$output_html"
-            echo '  <style>' >> "$output_html"
-            echo '    body { margin: 0; padding: 0; }' >> "$output_html"
-            echo '    svg { max-width: 100%; height: auto; display: block; }' >> "$output_html"
-            echo '  </style>' >> "$output_html"
-            echo '</head>' >> "$output_html"
-            echo '<body>' >> "$output_html"
-            cat "$output_svg" >> "$output_html"
-            echo '</body>' >> "$output_html"
-            echo '</html>' >> "$output_html"
-            
-            # Get commit information
-            local author=$(git log -1 --format="%aN" -- "$file_to_process" 2>/dev/null || echo "GitHub Actions")
-            local commit_msg=$(git log -1 --format="%s" -- "$file_to_process" 2>/dev/null || echo "Processing file with spaces")
-            local commit_msg_escaped=$(echo "$commit_msg" | sed 's/"/""/g')
-            local formatted_date=$(date +"%d.%m.%Y")
-            local formatted_time=$(date +"%H:%M:%S")
-            local short_hash=$(git log -1 --pretty=format:"%h" -- "$file_to_process" 2>/dev/null || echo "manual")
-            
-            # Determine if this is new or modified
-            local change_type="New"
-            local git_history=$(git log --follow --pretty=format:"%h %s" -- "$file_to_process")
-            local commit_count=$(echo "$git_history" | wc -l | tr -d ' ')
-            
-            if [ "$commit_count" -gt 1 ]; then
-              change_type="Modified"
-              local action_desc="Modified (Update)"
-            else
-              local action_desc="New"
-            fi
-            
-            # Calculate version
-            local version="1.0"
-            if [ "$change_type" = "Modified" ]; then
-              # Simple calculation: first update is 1.1, and so on
-              local minor_version=$((commit_count - 1))
-              version="1.${minor_version}"
-            fi
-            
-            # Add changelog entry
-            echo "$formatted_date,$formatted_time,\"$author\",\"${base_name}\",\"$action_desc\",\"${base_name}.drawio to ${base_name}.html\",\"$commit_msg_escaped\",\"$version\",\"$short_hash\"" >> html_files/CHANGELOG.csv
-            echo "Added entry to changelog for $file_to_process ($action_desc) with version $version"
-            
-            # Mark this file as processed to avoid duplicates
-            echo "$file_to_process" >> /tmp/processed_files.txt
-            
-            return 0
-          }
-
-          # Set debug output to help troubleshoot
-          echo "Current directory: $(pwd)"
-          echo "Listing drawio_files directory:"
-          ls -la drawio_files || echo "drawio_files directory not found"
-          
-          # Get the list of changed .drawio files in the current commit
-          # Use newline separated list to handle spaces in filenames
+          # Find all .drawio files that changed in this commit
           git diff --name-only HEAD^ HEAD 2>/dev/null | grep -E "\.drawio$" > /tmp/changed_files.txt || echo "" > /tmp/changed_files.txt
-          
-          # If HEAD^ fails (first commit), try against empty tree
           if [ ! -s /tmp/changed_files.txt ]; then
+            # If first commit or other issue, get all .drawio files
             git diff-tree --name-only --no-commit-id --root -r HEAD | grep -E "\.drawio$" > /tmp/changed_files.txt || echo "" > /tmp/changed_files.txt
           fi
           
-          echo "Files changed in this commit:"
+          echo "Files to process:"
           cat /tmp/changed_files.txt
           
-          # Look for changed files with spaces
-          echo "Checking for changed files with spaces in their names..."
-          
-          # Create a file to store changed files with spaces
-          > /tmp/files_with_spaces.txt
-          
-          # Process each file in changed_files.txt to find those with spaces
-          if [ -s /tmp/changed_files.txt ]; then
-            while IFS= read -r file; do
-              if [[ "$file" == *" "* ]]; then
-                echo "Found changed file with spaces: $file"
-                echo "$file" >> /tmp/files_with_spaces.txt
-              fi
-            done < /tmp/changed_files.txt
-          fi
-          
-          # If no changed files were detected, we need to check if this commit is explicitly
-          # for a file with spaces that might have been missed by git diff
-          if [ ! -s /tmp/changed_files.txt ]; then
-            # Get the commit message of the current commit
-            CURRENT_COMMIT_MSG=$(git log -1 --format="%s")
-            echo "Current commit message: $CURRENT_COMMIT_MSG"
-            
-            # If commit mentions a file with spaces, add it to our processing list
-            if [[ "$CURRENT_COMMIT_MSG" == *"Diagram Test Git"* ]] || 
-               [[ "$CURRENT_COMMIT_MSG" == *"Test Diag"* ]] ||
-               [[ "$CURRENT_COMMIT_MSG" == *"Untitled Diagram"* ]]; then
+          # Process each changed file
+          while IFS= read -r file || [ -n "$file" ]; do
+            if [ -f "$file" ]; then
+              echo "Processing: $file"
               
-              # Extract the likely filename from the commit message
-              for part in $CURRENT_COMMIT_MSG; do
-                if [[ -f "drawio_files/$part.drawio" ]]; then
-                  echo "Found file mentioned in commit: drawio_files/$part.drawio"
-                  echo "drawio_files/$part.drawio" >> /tmp/changed_files.txt
-                  echo "drawio_files/$part.drawio" >> /tmp/files_with_spaces.txt
-                fi
-              done
-            fi
-          fi
-          
-          # Process any changed files with spaces first
-          if [ -s /tmp/files_with_spaces.txt ]; then
-            echo "========================================="
-            echo "PROCESSING CHANGED FILES WITH SPACES IN THEIR NAMES"
-            echo "========================================="
-            while IFS= read -r space_file || [ -n "$space_file" ]; do
-              echo "Processing changed file with spaces: $space_file"
-              process_diagram_file "$space_file"
-            done < /tmp/files_with_spaces.txt
-          else
-            echo "No changed files with spaces detected in this commit."
-          fi
-
-          # Now process remaining changed files (skipping those with spaces that were already processed)
-          echo "========================================="
-          echo "PROCESSING REMAINING CHANGED FILES"
-          echo "========================================="
-          
-          # Create a temporary file for files without spaces
-          > /tmp/files_without_spaces.txt
-          
-          # Filter out files that were already processed (those with spaces)
-          while IFS= read -r changed_file || [ -n "$changed_file" ]; do
-            # Skip files with spaces since they've already been processed
-            if [[ "$changed_file" != *" "* ]]; then
-              echo "$changed_file" >> /tmp/files_without_spaces.txt
+              # Create output directories
+              mkdir -p svg_files html_files
+              
+              # Get base name
+              base=$(basename "$file" .drawio)
+              output_svg="svg_files/${base}.svg"
+              output_html="html_files/${base}.html"
+              
+              # Convert to SVG
+              echo "Converting to SVG..."
+              if /tmp/convert-drawio.sh "$file" "$output_svg"; then
+                echo "✅ Successfully converted to SVG: $output_svg"
+                
+                # Create HTML wrapper
+                echo "Creating HTML wrapper..."
+                echo '<!DOCTYPE html>
+          <html lang="en">
+          <head>
+            <meta charset="UTF-8">
+            <title>'"$base"'</title>
+            <style>
+              body { margin: 0; padding: 0; }
+              svg { max-width: 100%; height: auto; display: block; }
+            </style>
+          </head>
+          <body>' > "$output_html"
+                cat "$output_svg" >> "$output_html"
+                echo '</body>
+          </html>' >> "$output_html"
+                
+                # Add simple changelog entry
+                echo "$(date +"%d.%m.%Y"),$(date +"%H:%M:%S"),\"$base\",\"$file\",\"\",\"$(git log -1 --format="%s" HEAD)\",\"$(git log -1 --format="%h" HEAD)\"" >> html_files/CHANGELOG.csv
+                
+                echo "$file" >> /tmp/processed_files.txt
+              else
+                echo "❌ Failed to convert: $file"
+                echo "$file" >> /tmp/failed_files.txt
+                
+                # Create a placeholder SVG for failed conversions
+                echo '<svg xmlns="http://www.w3.org/2000/svg" width="640" height="480" viewBox="0 0 640 480">
+                  <rect width="100%" height="100%" fill="#ffffcc"/>
+                  <text x="10" y="20" font-family="Arial" font-size="16">Error: Failed to convert diagram</text>
+                  <text x="10" y="45" font-family="Arial" font-size="12">Please check the file and try again</text>
+                </svg>' > "$output_svg"
+                
+                # Create an error HTML wrapper
+                echo '<!DOCTYPE html>
+          <html lang="en">
+          <head>
+            <meta charset="UTF-8">
+            <title>'"$base"' (Conversion Failed)</title>
+            <style>
+              body { margin: 0; padding: 0; }
+              svg { max-width: 100%; height: auto; display: block; }
+              .error { color: red; padding: 10px; }
+            </style>
+          </head>
+          <body>
+            <div class="error">Conversion failed - please check the original file</div>' > "$output_html"
+                cat "$output_svg" >> "$output_html"
+                echo '</body>
+          </html>' >> "$output_html"
+              fi
+            else
+              echo "⚠️ File not found: $file"
             fi
           done < /tmp/changed_files.txt
           
-          # Read line by line to process files without spaces
-          while IFS= read -r changed_file || [ -n "$changed_file" ]; do
-            # Use our dedicated function to process the file
-            echo "Processing file without spaces: $changed_file"
-            process_diagram_file "$changed_file"
-
-            # NOTE: This part is no longer needed as the process_diagram_file function handles all this
-            # HTML creation, changelog updates, etc. are now handled by the function
-            
-            # For backwards compatibility, we'll still set these variables
-            # but the actual processing is done in the process_diagram_file function
-            base=$(basename "$changed_file" .drawio)
-            FILE_CHANGED=true
-            AUTHOR=$(git log -1 --format="%aN" -- "$changed_file" 2>/dev/null || echo "${{ github.actor }}")
-            COMMIT_MSG=$(git log -1 --format="%s" -- "$changed_file" 2>/dev/null || echo "No commit message")
-            COMMIT_MSG=$(echo "$COMMIT_MSG" | sed 's/"/""/g')
-            FORMATTED_DATE=$(date +"%d.%m.%Y")
-            FORMATTED_TIME=$(date +"%H:%M:%S")
-              
-              # Check if this is a new diagram or a modification
-              # First try with git history, fallback to file existence check
-              if git ls-files --error-unmatch "svg_files/${base}.svg" &>/dev/null; then
-                CHANGE_TYPE="Modified"
-              else
-                # Fallback to direct file check before our current conversion
-                if [ -f "svg_files/${base}.svg.old" ]; then
-                  CHANGE_TYPE="Modified"
-                else
-                  CHANGE_TYPE="New"
-                fi
-              fi
-              
-              # Make sure changelog directory exists
-              mkdir -p svg_files html_files
-              
-              # Make debug output to understand what's happening
-              echo "Creating changelog entries for: $base (${CHANGE_TYPE})"
-              
-              # Get enhanced version information using semantic versioning light (MAJOR.MINOR)
-              # Use git history to determine if this is a major or minor change
-              # Start with the commit message - if it contains keywords, categorize the change
-              MAJOR_KEYWORDS="redesign|new version|complete|refactor|overhaul|major|added"
-              MINOR_UPDATE_KEYWORDS="update|fix|adjust|tweak|enhance|improve|minor"
-              
-              # Default to standard minor change (increment minor version)
-              IS_MAJOR_CHANGE=0
-              CHANGE_DESCRIPTION="Change"
-              
-              # Check commit message for major change keywords (case insensitive)
-              if echo "$COMMIT_MSG" | grep -iE "$MAJOR_KEYWORDS" > /dev/null; then
-                IS_MAJOR_CHANGE=1
-                CHANGE_DESCRIPTION="Major Change"
-                echo "Detected major change based on commit message keywords"
-              # Check for minor update keywords (case insensitive)
-              elif echo "$COMMIT_MSG" | grep -iE "$MINOR_UPDATE_KEYWORDS" > /dev/null; then
-                CHANGE_DESCRIPTION="Update"
-                echo "Detected update based on commit message keywords"
-              fi
-              
-              # Get file-specific history count for versioning
-              echo "Looking for commit history of: $changed_file"
-              # Store version history in a variable
-              FILE_COMMIT_HISTORY=$(git log --follow --pretty=format:"%h %s" -- "$changed_file")
-              echo "File commit history:"
-              echo "$FILE_COMMIT_HISTORY"
-              
-              # Count file-specific commits only
-              FILE_COMMIT_COUNT=$(echo "$FILE_COMMIT_HISTORY" | wc -l | tr -d ' ')
-              echo "File has $FILE_COMMIT_COUNT commits in its history"
-              
-              # This section is now handled by the process_diagram_file function
-              # But we'll maintain compatibility with the existing workflow by
-              # setting variables that might be used elsewhere
-              
-              # Set default versions based on our improved logic
-              MINOR_VERSION=$FILE_COMMIT_COUNT
-              MAJOR_VERSION=1
-              
-              # For version calculation, we now use the simpler approach from our function
-              if [ "$CHANGE_TYPE" = "New" ]; then
-                VERSION="1.0"
-              else
-                # If this is the first update, it's 1.1, and so on
-                MINOR_NUM=$((FILE_COMMIT_COUNT - 1))
-                VERSION="1.${MINOR_NUM}"
-              fi
-              
-              # Set action description
-              if [ "$CHANGE_TYPE" = "New" ]; then
-                ACTION_DESC="New"
-              else
-                ACTION_DESC="Modified (Update)"
-              fi
-              
-              # These values are now informational only, as the actual changelog
-              # entry was created by the process_diagram_file function
-              COMMIT_HASH=$(git log -1 --pretty=format:"%H" -- "$changed_file" 2>/dev/null || echo "manual")
-              SHORT_HASH=$(git log -1 --pretty=format:"%h" -- "$changed_file" 2>/dev/null || echo "manual")
-              
-              # The changelog entry has already been written by the process_diagram_file function
-              echo "Processed $changed_file with version $VERSION (hash: $SHORT_HASH)"
-            
-          done < /tmp/files_without_spaces.txt
+          echo "Process completed."
+          echo "Successful conversions: $(wc -l < /tmp/processed_files.txt)"
+          echo "Failed conversions: $(wc -l < /tmp/failed_files.txt)"
 
       # Step 5: Commit and push changes
       - name: Commit and push changes
