@@ -50,14 +50,45 @@ cleanup() {
 # Set up trap for cleanup
 trap cleanup EXIT
 
+# Check and fix simple numbered filenames
+check_filename_format() {
+    local input_file="$1"
+    local base_name=$(basename "$input_file" .drawio)
+    
+    # If the file is just a simple number, run the simple renamer first
+    if [[ "$base_name" =~ ^[0-9]+$ ]]; then
+        echo "File $input_file has a simple numeric name format"
+        echo "Running simple file renamer to standardize naming..."
+        "${SCRIPT_DIR}/simple_file_renamer.sh" "$input_file"
+        
+        # The file path will have changed, return the new path
+        local new_path="${DRAWIO_DIR}/0.${base_name}.1. Untitled.drawio"
+        if [ -f "$new_path" ]; then
+            echo "$new_path"
+            return 0
+        else
+            # If renaming failed, return the original path
+            echo "$input_file"
+            return 1
+        fi
+    else
+        # No change needed, return the original path
+        echo "$input_file"
+        return 0
+    fi
+}
+
 # Convert a single diagram file
 convert_diagram() {
     local input_file="$1"
-    local base_name=$(basename "$input_file" .drawio)
+    
+    # Check and fix the filename format if needed
+    local processed_file=$(check_filename_format "$input_file")
+    local base_name=$(basename "$processed_file" .drawio)
     local svg_output="${SVG_DIR}/${base_name}.svg"
     local html_output="${HTML_DIR}/${base_name}.html"
     
-    echo "Converting: $input_file"
+    echo "Converting: $processed_file"
     
     # Convert to SVG
     if [ ! -f "$svg_output" ] || [ "$input_file" -nt "$svg_output" ]; then

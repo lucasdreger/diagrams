@@ -87,7 +87,7 @@ jobs:
         run: |
           echo "Converting Draw.io files and adding auto-IDs..."
           # Make sure our scripts are executable
-          chmod +x ./scripts/convert_and_auto_id.sh ./scripts/auto_id_converted_diagrams.sh
+          chmod +x ./scripts/convert_and_auto_id.sh ./scripts/auto_id_converted_diagrams.sh ./scripts/simple_file_renamer.sh
           
           # Run conversion with proper arguments
           if [[ "${{ steps.changes.outputs.all_files }}" == "true" ]]; then

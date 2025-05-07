@@ -66,10 +66,22 @@ process_diagram() {
     
     # Parse the filename and extract the category and level
     if [[ "$base_name" =~ ^([0-9]+\.[0-9]+)\. ]]; then
+        # Standard format: Category.Level. Description (3.1. SAP Overview)
         local category_level="${BASH_REMATCH[1]}"
         local remainder="${base_name#${category_level}.}"
         
         # Find the highest existing ID for this category/level
+        local highest_id=$(find_highest_id "$category_level")
+        
+        # Calculate the next ID
+        local next_id=$((highest_id + 1))
+    elif [[ "$base_name" =~ ^([0-9]+)$ ]]; then
+        # Simple numeric format: just a number (e.g., 25)
+        local number="$base_name"
+        local category_level="0.$number"
+        local remainder="Untitled"
+        
+        # Find the highest existing ID for this category/level (or start with 1)
         local highest_id=$(find_highest_id "$category_level")
         
         # Calculate the next ID
@@ -150,9 +162,11 @@ process_diagram() {
         # Return the new base name for use in other scripts
         echo "$new_base_name"
     else
-        echo "Error: Filename does not match the expected pattern (e.g., '3.1. SAP Overview')"
-        echo "Expected format: Category.DetailLevel. DiagramName"
-        echo "Example: 3.1. SAP Overview (would become 3.1.4. SAP Overview with ID 4)"
+        echo "Error: Filename does not match any of the expected patterns"
+        echo "Expected formats:"
+        echo "1. Category.DetailLevel. DiagramName (e.g., '3.1. SAP Overview')"
+        echo "2. Simple number (e.g., '25')"
+        echo "For other formats, please use the simple_file_renamer.sh script first"
         return 1
     fi
 }
