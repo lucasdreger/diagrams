@@ -134,9 +134,9 @@ jobs:
       - name: Convert Draw.io files
         run: |
           # Set up virtual display for headless operation with improved configuration
-          # Skip keyboard setup to avoid XKEYBOARD errors
+          # Use standard Xvfb options to avoid XKEYBOARD errors
           mkdir -p /tmp/.X11-unix
-          Xvfb :99 -screen 0 1280x1024x24 -nolisten tcp -ac +extension RANDR +render -noreset -noxkbmap &
+          Xvfb :99 -screen 0 1280x1024x24 -nolisten tcp -ac +extension RANDR +render -noreset &
           XVFB_PID=$!
           export DISPLAY=:99
           sleep 2 # Give Xvfb more time to start
@@ -170,9 +170,9 @@ jobs:
             exit 0
           fi
           
-          # Third try with different arguments
-          echo "Trying with different arguments..."
-          xvfb-run --auto-servernum --server-args="-screen 0 1280x1024x24 -noxkbmap" drawio -x -f svg -o "$output_file" "$input_file"
+          # Third try with minimal arguments
+          echo "Trying with minimal arguments..."
+          xvfb-run --auto-servernum --server-args="-screen 0 1280x1024x24" drawio -x -f svg -o "$output_file" "$input_file"
           EOL
           chmod +x /tmp/convert-drawio.sh
 
