@@ -1,4 +1,4 @@
-name: Convert Draw.io Files
+name: Convert Draw.io Files with Auto-ID
 
 on:
   push:
@@ -6,6 +6,15 @@ on:
       - '**/*.drawio'
       - 'drawio_files/**'
   workflow_dispatch: # Enable manual triggering
+    inputs:
+      convert_all:
+        description: 'Convert all diagrams (not just changed ones)'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
 
 # Add concurrency control to prevent queued workflows and resolve XKEYBOARD issues
 concurrency:
@@ -46,75 +55,58 @@ jobs:
             echo "Date,Time,Diagram,Commit" > html_files/CHANGELOG.csv
           fi
 
-      # Step 4: Convert .drawio files to SVG and wrap them in HTML
-      - name: Convert Draw.io files
+      # Step 4: Find modified Draw.io files
+      - name: Find modified Draw.io files
+        id: changes
         run: |
-          # Set up virtual display for headless operation
-          mkdir -p /tmp/.X11-unix
-          Xvfb :99 -screen 0 1280x1024x24 -nolisten tcp -ac +extension RANDR +render -noreset &
-          XVFB_PID=$!
-          export DISPLAY=:99
-          sleep 2 # Give Xvfb time to start
-          
-          # Verify Xvfb is running
-          if ! ps -p $XVFB_PID > /dev/null; then
-            echo "⚠️ Xvfb failed to start, trying alternative configuration..."
-            xvfb-run --auto-servernum --server-args="-screen 0 1280x1024x24" echo "Testing Xvfb" || echo "Warning: xvfb-run test failed but continuing"
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ github.event.inputs.convert_all }}" == "true" ]]; then
+            echo "Using all Draw.io files"
+            find drawio_files -name "*.drawio" > /tmp/changed_files.txt
+            echo "all_files=true" >> $GITHUB_OUTPUT
+            echo "has_changes=true" >> $GITHUB_OUTPUT
           else
-            echo "✅ Xvfb started successfully with PID $XVFB_PID"
+            echo "Finding changed Draw.io files"
+            git diff --name-only ${{ github.event.before }} ${{ github.event.after }} | grep "\.drawio$" > /tmp/changed_files.txt || true
+            
+            # Check if there are changes
+            if [ -s /tmp/changed_files.txt ]; then
+              echo "Changed Draw.io files found:"
+              cat /tmp/changed_files.txt
+              echo "all_files=false" >> $GITHUB_OUTPUT
+              echo "has_changes=true" >> $GITHUB_OUTPUT
+            else
+              echo "No changed Draw.io files"
+              echo "all_files=false" >> $GITHUB_OUTPUT
+              echo "has_changes=false" >> $GITHUB_OUTPUT
+            fi
           fi
           
-          # Create a simple converter script
-          cat > /tmp/convert-drawio.sh << 'EOL'
-          #!/bin/bash
-          input_file=$1
-          output_file=$2
-          echo "Converting: $input_file to $output_file"
+      # Step 5: Convert .drawio files and assign auto IDs
+      - name: Convert and Auto-assign IDs to Draw.io files
+        if: steps.changes.outputs.has_changes == 'true'
+        run: |
+          echo "Converting Draw.io files and adding auto-IDs..."
+          # Make sure our scripts are executable
+          chmod +x ./scripts/convert_and_auto_id.sh ./scripts/auto_id_converted_diagrams.sh
           
-          # Try direct command first
-          if drawio -x -f svg -o "$output_file" "$input_file"; then
-            exit 0
+          # Run conversion with proper arguments
+          if [[ "${{ steps.changes.outputs.all_files }}" == "true" ]]; then
+            # Process all diagrams
+            ./scripts/convert_and_auto_id.sh --all
+          else
+            # Process only changed diagrams
+            ./scripts/convert_and_auto_id.sh --file-list /tmp/changed_files.txt
           fi
           
-          # Try with xvfb-run as fallback
-          xvfb-run --auto-servernum --server-args="-screen 0 1280x1024x24" drawio -x -f svg -o "$output_file" "$input_file"
-          EOL
-          chmod +x /tmp/convert-drawio.sh
+          # Our convert_and_auto_id.sh script handles all the conversion and ID assignment
           
-          # Track processed files
-          > /tmp/processed_files.txt
-          > /tmp/failed_files.txt
-          
-          # Find all .drawio files that changed in this commit
-          git diff --name-only HEAD^ HEAD 2>/dev/null | grep -E "\.drawio$" > /tmp/changed_files.txt || echo "" > /tmp/changed_files.txt
-          if [ ! -s /tmp/changed_files.txt ]; then
-            # If first commit or other issue, get all .drawio files
-            git diff-tree --name-only --no-commit-id --root -r HEAD | grep -E "\.drawio$" > /tmp/changed_files.txt || echo "" > /tmp/changed_files.txt
-          fi
-          
-          echo "Files to process:"
-          cat /tmp/changed_files.txt
-          
-          # Process each changed file
-          while IFS= read -r file || [ -n "$file" ]; do
-            if [ -f "$file" ]; then
-              echo "Processing: $file"
-              
-              # Create output directories
-              mkdir -p svg_files html_files
-              
-              # Get base name
-              base=$(basename "$file" .drawio)
-              output_svg="svg_files/${base}.svg"
-              output_html="html_files/${base}.html"
-              
-              # Convert to SVG
-              echo "Converting to SVG..."
-              if /tmp/convert-drawio.sh "$file" "$output_svg"; then
-                echo "✅ Successfully converted to SVG: $output_svg"
-                
-                # Create HTML wrapper
-                echo "Creating HTML wrapper..."
+      # Step 6: Commit and push changes
+      - name: Commit and push changes
+        if: steps.changes.outputs.has_changes == 'true'
+        run: |
+          # Check if we have any changes to commit
+          if git status --porcelain | grep -q .; then
+            echo "Committing changes..."
                 echo '<!DOCTYPE html>
           <html lang="en">
           <head>
@@ -123,68 +115,11 @@ jobs:
             <style>
               body { margin: 0; padding: 0; }
               svg { max-width: 100%; height: auto; display: block; }
-            </style>
-          </head>
-          <body>' > "$output_html"
-                cat "$output_svg" >> "$output_html"
-                echo '</body>
-          </html>' >> "$output_html"
-                
-                # Add simple changelog entry
-                echo "$(date +"%d.%m.%Y"),$(date +"%H:%M:%S"),\"$base\",$(git log -1 --format="%h" --no-color)" >> html_files/CHANGELOG.csv
-                
-                echo "$file" >> /tmp/processed_files.txt
-              else
-                echo "❌ Failed to convert: $file"
-                echo "$file" >> /tmp/failed_files.txt
-                
-                # Create a placeholder SVG for failed conversions
-                echo '<svg xmlns="http://www.w3.org/2000/svg" width="640" height="480" viewBox="0 0 640 480">
-                  <rect width="100%" height="100%" fill="#ffffcc"/>
-                  <text x="10" y="20" font-family="Arial" font-size="16">Error: Failed to convert diagram</text>
-                  <text x="10" y="45" font-family="Arial" font-size="12">Please check the file and try again</text>
-                </svg>' > "$output_svg"
-                
-                # Create an error HTML wrapper
-                echo '<!DOCTYPE html>
-          <html lang="en">
-          <head>
-            <meta charset="UTF-8">
-            <title>'"$base"' (Conversion Failed)</title>
-            <style>
-              body { margin: 0; padding: 0; }
-              svg { max-width: 100%; height: auto; display: block; }
-              .error { color: red; padding: 10px; }
-            </style>
-          </head>
-          <body>
-            <div class="error">Conversion failed - please check the original file</div>' > "$output_html"
-                cat "$output_svg" >> "$output_html"
-                echo '</body>
-          </html>' >> "$output_html"
-              fi
-            else
-              echo "⚠️ File not found: $file"
-            fi
-          done < /tmp/changed_files.txt
-          
-          echo "Process completed."
-          echo "Successful conversions: $(wc -l < /tmp/processed_files.txt)"
-          echo "Failed conversions: $(wc -l < /tmp/failed_files.txt)"
-
-      # Step 5: Commit and push changes
-      - name: Commit and push changes
-        run: |
-          git config --local user.name "github-actions[bot]"
-          git config --local user.email "github-actions[bot]@users.noreply.github.com"
-          
-          # Add our changes
-          git add svg_files html_files
-          
-          # Only commit if there are changes
-          if git diff --staged --quiet; then
-            echo "No changes to commit"
-          else
-            git commit -m "Auto-converted draw.io files"
+            git add svg_files/ html_files/ drawio_files/ 
+            git commit -m "Auto convert and ID assignment for Draw.io diagrams [skip ci]" || echo "No changes to commit"
             git push
+          else
+            echo "No changes to commit"
           fi
+
+# End of workflow - our files have been converted and committed
