@@ -142,7 +142,7 @@ jobs:
             echo "Rebasing local changes on top of remote changes..."
             if git rebase origin/$BRANCH_NAME; then
               echo "Rebase successful, pushing changes..."
-              git push origin $BRANCH_NAME
+              git push "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" $BRANCH_NAME
             else
               echo "Rebase had conflicts. Using alternative merge strategy..."
               git rebase --abort
@@ -155,7 +155,7 @@ jobs:
               # Re-apply our changes
               git add svg_files/ html_files/ drawio_files/
               git commit -m "Auto convert and ID assignment for Draw.io diagrams (merge commit) [skip ci]"
-              git push origin $BRANCH_NAME
+              git push "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" $BRANCH_NAME
             fi
           else
             echo "No changes to commit"

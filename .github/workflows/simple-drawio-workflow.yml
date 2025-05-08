@@ -306,9 +306,6 @@ jobs:
           git config --local user.name "github-actions[bot]"
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           
-          # Set up GitHub authentication
-          git config --local --add http.https://github.com/.extraheader "AUTHORIZATION: basic $(echo -n "x-access-token:${{ github.token }}" | base64)"
-          
           # Add all changes
           git add svg_files/ html_files/ drawio_files/
           
@@ -328,7 +325,7 @@ jobs:
             echo "Rebasing local changes on top of remote changes..."
             if git rebase origin/$BRANCH_NAME; then
               echo "Rebase successful, pushing changes..."
-              git push origin $BRANCH_NAME
+              git push "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" $BRANCH_NAME
               echo "Changes committed and pushed successfully"
             else
               echo "Rebase had conflicts. Using alternative merge strategy..."
@@ -343,7 +340,7 @@ jobs:
               # Re-apply our changes and create a new commit
               git add svg_files/ html_files/ drawio_files/
               git commit -m "Assigned IDs to diagrams and converted to SVG/HTML (merge commit)"
-              git push origin $BRANCH_NAME
+              git push "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" $BRANCH_NAME
               echo "Changes committed and pushed successfully using merge strategy"
             fi
           else

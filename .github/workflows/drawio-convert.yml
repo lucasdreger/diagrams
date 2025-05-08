@@ -118,7 +118,7 @@ jobs:
                       
                       # Try to rebase first
                       if git rebase origin/$BRANCH_NAME; then
-                        git push "https://${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" HEAD:$BRANCH_NAME
+                        git push "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" HEAD:$BRANCH_NAME
                         echo "✅ Changes pushed with rebase strategy"
                       else
                         # If rebase fails, try merge strategy
@@ -126,7 +126,7 @@ jobs:
                         git pull --no-rebase origin $BRANCH_NAME
                         git add "${file}.drawio"
                         git commit -m "Add .drawio extension to $filename (merge commit)"
-                        git push "https://${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" HEAD:$BRANCH_NAME
+                        git push "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" HEAD:$BRANCH_NAME
                         echo "✅ Changes pushed with merge strategy"
                       fi
                     fi
@@ -313,16 +313,14 @@ jobs:
               # Re-add our changes in case they were lost in the merge
               git add svg_files html_files
               git commit -m "Auto-converted draw.io files (merge commit)"
-            fi
-            
-            # Use GitHub token for authentication and push with retry logic
+            fi              # Use GitHub token for authentication and push with retry logic
             echo "Pushing changes to remote repository..."
             MAX_RETRIES=3
             RETRY_COUNT=0
             PUSH_SUCCESS=false
             
             while [ $RETRY_COUNT -lt $MAX_RETRIES ] && [ "$PUSH_SUCCESS" = false ]; do
-              if git push "https://${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" HEAD:$BRANCH_NAME; then
+              if git push "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" HEAD:$BRANCH_NAME; then
                 echo "Successfully pushed changes to remote repository."
                 PUSH_SUCCESS=true
               else
@@ -419,7 +417,7 @@ jobs:
           PUSH_SUCCESS=false
           
           while [ $RETRY_COUNT -lt $MAX_RETRIES ] && [ "$PUSH_SUCCESS" = false ]; do
-            if git push origin $BRANCH_NAME; then
+            if git push "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" $BRANCH_NAME; then
               echo "Successfully pushed changes to remote repository."
               PUSH_SUCCESS=true
             else
@@ -1234,9 +1232,6 @@ jobs:
             # Get current branch name
             BRANCH_NAME=${GITHUB_REF#refs/heads/}
             
-            # Set up GitHub authentication
-            git config --local --add http.https://github.com/.extraheader "AUTHORIZATION: basic $(echo -n "x-access-token:${{ github.token }}" | base64)"
-            
             # Fetch the latest from remote to ensure we're up to date
             echo "Fetching latest changes from remote..."
             git fetch origin $BRANCH_NAME
@@ -1245,7 +1240,7 @@ jobs:
             echo "Rebasing local changes on top of remote changes..."
             if git rebase origin/$BRANCH_NAME; then
               echo "Rebase successful, pushing changes..."
-              git push origin $BRANCH_NAME
+              git push "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" $BRANCH_NAME
               echo "✅ Successfully committed and pushed renamed files"
             else
               echo "⚠️ Rebase had conflicts. Using alternative merge strategy..."
@@ -1260,7 +1255,7 @@ jobs:
               # Re-apply our changes and create a new commit
               git add drawio_files/*.drawio
               git commit -m "$COMMIT_MSG (merge commit)"
-              git push origin $BRANCH_NAME
+              git push "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" $BRANCH_NAME
               echo "✅ Successfully committed and pushed renamed files using merge strategy"
             fi
           fi
