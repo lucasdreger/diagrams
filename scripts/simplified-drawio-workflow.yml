@@ -130,7 +130,33 @@ jobs:
               svg { max-width: 100%; height: auto; display: block; }
             git add svg_files/ html_files/ drawio_files/ 
             git commit -m "Auto convert and ID assignment for Draw.io diagrams [skip ci]" || echo "No changes to commit"
-            git push
+            
+            # Get current branch name
+            BRANCH_NAME=${GITHUB_REF#refs/heads/}
+            
+            # Fetch latest changes
+            echo "Fetching latest changes from remote..."
+            git fetch origin $BRANCH_NAME
+            
+            # Try to rebase our changes
+            echo "Rebasing local changes on top of remote changes..."
+            if git rebase origin/$BRANCH_NAME; then
+              echo "Rebase successful, pushing changes..."
+              git push origin $BRANCH_NAME
+            else
+              echo "Rebase had conflicts. Using alternative merge strategy..."
+              git rebase --abort
+              
+              # Pull with --no-rebase to create a merge commit
+              git fetch origin $BRANCH_NAME
+              git checkout $BRANCH_NAME
+              git pull --no-rebase origin $BRANCH_NAME
+              
+              # Re-apply our changes
+              git add svg_files/ html_files/ drawio_files/
+              git commit -m "Auto convert and ID assignment for Draw.io diagrams (merge commit) [skip ci]"
+              git push origin $BRANCH_NAME
+            fi
           else
             echo "No changes to commit"
           fi

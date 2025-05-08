@@ -107,9 +107,28 @@ jobs:
                       git config --local user.email "github-actions[bot]@users.noreply.github.com"
                       git commit -m "Add .drawio extension to $filename"
                       
-                      # Push changes immediately to avoid conflicts
+                      # Push changes using improved fetch/pull strategy
                       echo "Pushing changes to remote repository..."
-                      git push "https://${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" HEAD:${GITHUB_REF#refs/heads/}
+                      
+                      # Get current branch name
+                      BRANCH_NAME=${GITHUB_REF#refs/heads/}
+                      
+                      # Fetch latest changes
+                      git fetch origin $BRANCH_NAME
+                      
+                      # Try to rebase first
+                      if git rebase origin/$BRANCH_NAME; then
+                        git push "https://${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" HEAD:$BRANCH_NAME
+                        echo "✅ Changes pushed with rebase strategy"
+                      else
+                        # If rebase fails, try merge strategy
+                        git rebase --abort
+                        git pull --no-rebase origin $BRANCH_NAME
+                        git add "${file}.drawio"
+                        git commit -m "Add .drawio extension to $filename (merge commit)"
+                        git push "https://${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" HEAD:$BRANCH_NAME
+                        echo "✅ Changes pushed with merge strategy"
+                      fi
                     fi
                   fi
                 else
@@ -277,13 +296,51 @@ jobs:
           else
             git commit -m "Auto-converted draw.io files"
             
-            # Pull the latest changes before pushing
-            echo "Pulling latest changes from remote repository..."
-            git pull --rebase origin ${GITHUB_REF#refs/heads/}
+            # Get current branch name
+            BRANCH_NAME=${GITHUB_REF#refs/heads/}
             
-            # Use GitHub token for authentication and push
+            # Try to rebase our changes on the remote branch
+            echo "Rebasing local changes on top of remote changes..."
+            if git pull --rebase origin $BRANCH_NAME; then
+              echo "Rebase successful, pushing changes..."
+            else
+              echo "Rebase had conflicts, switching to merge strategy..."
+              git rebase --abort
+              
+              # Pull with merge strategy
+              git pull --no-rebase origin $BRANCH_NAME
+              
+              # Re-add our changes in case they were lost in the merge
+              git add svg_files html_files
+              git commit -m "Auto-converted draw.io files (merge commit)"
+            fi
+            
+            # Use GitHub token for authentication and push with retry logic
             echo "Pushing changes to remote repository..."
-            git push "https://${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" HEAD:${GITHUB_REF#refs/heads/}
+            MAX_RETRIES=3
+            RETRY_COUNT=0
+            PUSH_SUCCESS=false
+            
+            while [ $RETRY_COUNT -lt $MAX_RETRIES ] && [ "$PUSH_SUCCESS" = false ]; do
+              if git push "https://${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" HEAD:$BRANCH_NAME; then
+                echo "Successfully pushed changes to remote repository."
+                PUSH_SUCCESS=true
+              else
+                RETRY_COUNT=$((RETRY_COUNT + 1))
+                if [ $RETRY_COUNT -lt $MAX_RETRIES ]; then
+                  echo "Push failed. Trying pull again before retry..."
+                  git pull --no-rebase origin $BRANCH_NAME
+                  echo "Retry in 5 seconds... (Attempt $RETRY_COUNT of $MAX_RETRIES)"
+                  sleep 5
+                fi
+              fi
+            done
+            
+            if [ "$PUSH_SUCCESS" = true ]; then
+              echo "✅ Changes successfully pushed after $RETRY_COUNT retries"
+            else
+              echo "❌ Failed to push changes after $MAX_RETRIES attempts"
+            fi
             echo "changes_made=true" >> $GITHUB_OUTPUT
           fi
           
@@ -336,19 +393,41 @@ jobs:
       - name: Push changes
         if: steps.commit_changes.outputs.changes_made == 'true'
         run: |
+          # Get current branch name
+          BRANCH_NAME=${GITHUB_REF#refs/heads/}
+          
+          # Fetch latest changes before pushing
+          echo "Fetching latest changes from remote..."
+          git fetch origin $BRANCH_NAME
+          
+          # Try to rebase our changes on top of latest remote
+          echo "Rebasing changes before push..."
+          if git rebase origin/$BRANCH_NAME; then
+            echo "Rebase successful, attempting push..."
+          else
+            echo "Rebase conflicts detected, switching to merge strategy..."
+            git rebase --abort
+            git pull --no-rebase origin $BRANCH_NAME
+            # Re-add any changes that might have been lost in the merge
+            git add svg_files/ html_files/ drawio_files/
+            git commit -m "Auto-regenerate SVG/HTML diagrams (merge commit)"
+          fi
+          
           # Try to push changes, with multiple retries for transient issues
           MAX_RETRIES=3
           RETRY_COUNT=0
           PUSH_SUCCESS=false
           
           while [ $RETRY_COUNT -lt $MAX_RETRIES ] && [ "$PUSH_SUCCESS" = false ]; do
-            if git push origin main; then
+            if git push origin $BRANCH_NAME; then
               echo "Successfully pushed changes to remote repository."
               PUSH_SUCCESS=true
             else
               RETRY_COUNT=$((RETRY_COUNT + 1))
               if [ $RETRY_COUNT -lt $MAX_RETRIES ]; then
-                echo "Push failed. Retrying in 5 seconds... (Attempt $RETRY_COUNT of $MAX_RETRIES)"
+                echo "Push failed. Trying alternative strategy..."
+                git pull --no-rebase origin $BRANCH_NAME
+                echo "Retry in 5 seconds... (Attempt $RETRY_COUNT of $MAX_RETRIES)"
                 sleep 5
                 
                 # Pull latest changes again before retrying
@@ -1149,11 +1228,41 @@ jobs:
             git commit -m "$COMMIT_MSG"
             echo "commit_done=true" >> $GITHUB_OUTPUT
             
-            # Push the changes
+            # Push the changes with proper fetch/pull strategy
             echo "Pushing changes to remote repository..."
-            git push origin HEAD:${GITHUB_REF#refs/heads/}
             
-            echo "✅ Successfully committed and pushed renamed files"
+            # Get current branch name
+            BRANCH_NAME=${GITHUB_REF#refs/heads/}
+            
+            # Set up GitHub authentication
+            git config --local --add http.https://github.com/.extraheader "AUTHORIZATION: basic $(echo -n "x-access-token:${{ github.token }}" | base64)"
+            
+            # Fetch the latest from remote to ensure we're up to date
+            echo "Fetching latest changes from remote..."
+            git fetch origin $BRANCH_NAME
+            
+            # Try to rebase our changes on top of the remote branch
+            echo "Rebasing local changes on top of remote changes..."
+            if git rebase origin/$BRANCH_NAME; then
+              echo "Rebase successful, pushing changes..."
+              git push origin $BRANCH_NAME
+              echo "✅ Successfully committed and pushed renamed files"
+            else
+              echo "⚠️ Rebase had conflicts. Using alternative merge strategy..."
+              # Abort the rebase and try a different approach
+              git rebase --abort
+              
+              # Pull with --no-rebase to create a merge commit instead
+              git fetch origin $BRANCH_NAME
+              git checkout $BRANCH_NAME
+              git pull --no-rebase origin $BRANCH_NAME
+              
+              # Re-apply our changes and create a new commit
+              git add drawio_files/*.drawio
+              git commit -m "$COMMIT_MSG (merge commit)"
+              git push origin $BRANCH_NAME
+              echo "✅ Successfully committed and pushed renamed files using merge strategy"
+            fi
           fi
       # Step 4: Detect and regenerate missing HTML/SVG files
       - name: Check for missing generated files

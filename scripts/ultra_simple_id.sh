@@ -4,7 +4,8 @@
 # The most basic script to add (ID XXX) to diagram filenames
 
 # Configuration
-ID_FILE="/Users/lucasdreger/apps/diagrams/drawio_files/.id_counter"
+# Use a relative path for better portability in GitHub Actions
+ID_FILE="drawio_files/.id_counter"
 
 # Ensure we have an initial ID counter
 if [ ! -f "$ID_FILE" ]; then

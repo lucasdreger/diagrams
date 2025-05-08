@@ -299,21 +299,53 @@ jobs:
           # Kill Xvfb when done
           kill $XVFB_PID
       
-      # Step 6: Commit and push changes
+      # Step 6: Commit and push changes with proper fetch/pull strategy
       - name: Commit and push changes
         if: steps.changes.outputs.has_changes == 'true'
         run: |
           git config --local user.name "github-actions[bot]"
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           
+          # Set up GitHub authentication
+          git config --local --add http.https://github.com/.extraheader "AUTHORIZATION: basic $(echo -n "x-access-token:${{ github.token }}" | base64)"
+          
           # Add all changes
           git add svg_files/ html_files/ drawio_files/
           
           # Only commit if there are changes
           if ! git diff --staged --quiet; then
+            # Commit the changes locally
             git commit -m "Assigned IDs to diagrams and converted to SVG/HTML"
-            git push origin ${GITHUB_REF#refs/heads/}
-            echo "Changes committed and pushed successfully"
+            
+            # Get current branch name
+            BRANCH_NAME=${GITHUB_REF#refs/heads/}
+            
+            # Fetch the latest from remote to ensure we're up to date
+            echo "Fetching latest changes from remote..."
+            git fetch origin $BRANCH_NAME
+            
+            # Try to rebase our changes on top of the remote branch
+            echo "Rebasing local changes on top of remote changes..."
+            if git rebase origin/$BRANCH_NAME; then
+              echo "Rebase successful, pushing changes..."
+              git push origin $BRANCH_NAME
+              echo "Changes committed and pushed successfully"
+            else
+              echo "Rebase had conflicts. Using alternative merge strategy..."
+              # Abort the rebase and try a different approach
+              git rebase --abort
+              
+              # Pull with --no-rebase to create a merge commit instead
+              git fetch origin $BRANCH_NAME
+              git checkout $BRANCH_NAME
+              git pull --no-rebase origin $BRANCH_NAME
+              
+              # Re-apply our changes and create a new commit
+              git add svg_files/ html_files/ drawio_files/
+              git commit -m "Assigned IDs to diagrams and converted to SVG/HTML (merge commit)"
+              git push origin $BRANCH_NAME
+              echo "Changes committed and pushed successfully using merge strategy"
+            fi
           else
             echo "No changes to commit"
           fi
