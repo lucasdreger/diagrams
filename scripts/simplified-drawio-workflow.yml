@@ -81,15 +81,24 @@ jobs:
             fi
           fi
           
-      # Step 5: Convert .drawio files and assign auto IDs
+      # Step 5: Convert .drawio files and assign simple sequential IDs
       - name: Convert and Auto-assign IDs to Draw.io files
         if: steps.changes.outputs.has_changes == 'true'
         run: |
           echo "Converting Draw.io files and adding auto-IDs..."
           # Make sure our scripts are executable
-          chmod +x ./scripts/convert_and_auto_id.sh ./scripts/auto_id_converted_diagrams.sh ./scripts/simple_file_renamer.sh
+          chmod +x ./scripts/convert_and_auto_id.sh ./scripts/ultra_simple_id.sh
           
-          # Run conversion with proper arguments
+          # First assign IDs to all changed files
+          echo "Assigning simple IDs to changed Draw.io files..."
+          while IFS= read -r file; do
+            if [ -f "$file" ]; then
+              echo "Processing $file for ID assignment..."
+              ./scripts/ultra_simple_id.sh "$file"
+            fi
+          done < /tmp/changed_files.txt
+          
+          # Now run the conversion with proper arguments
           if [[ "${{ steps.changes.outputs.all_files }}" == "true" ]]; then
             # Process all diagrams
             ./scripts/convert_and_auto_id.sh --all
@@ -98,7 +107,11 @@ jobs:
             ./scripts/convert_and_auto_id.sh --file-list /tmp/changed_files.txt
           fi
           
-          # Our convert_and_auto_id.sh script handles all the conversion and ID assignment
+          # Commit all the changes
+          git config --local user.name "github-actions[bot]"
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git add drawio_files/* svg_files/* html_files/* 2>/dev/null || true
+          git commit -m "Assigned IDs to diagrams and converted to SVG/HTML" || echo "No changes to commit"
           
       # Step 6: Commit and push changes
       - name: Commit and push changes
