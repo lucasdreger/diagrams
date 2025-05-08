@@ -36,3 +36,4 @@ Saved next ID counter: 1
 08.05.2025,11:33:17,"28","drawio_files/28.drawio","","Added 28.drawio","3c363aa"
 08.05.2025,14:21:20,"GitHub Actions","workflow_test_fixed (ID 012)","ID Added","workflow_test_fixed → workflow_test_fixed (ID 012)","Added ID 012","1.0","auto","012"
 08.05.2025,14:21:27,"GitHub Actions","test_workflow_fix (ID 004)","Converted","test_workflow_fix (ID 004)","Converted to SVG/HTML","1.0","30b4349","004"
+08.05.2025,14:25:51,"conflict_resolution_test","drawio_files/conflict_resolution_test.drawio","","Add test diagram to verify improved CHANGELOG.csv conflict resolution","0d904d2"
