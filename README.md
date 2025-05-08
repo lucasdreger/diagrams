@@ -2,15 +2,35 @@
 
 This repository contains diagrams created with Draw.io and automatically processes them to:
 
-1. Assign sequential ID numbers to diagram files "(ID XXX)" 
+1. Assign sequential ID numbers to diagram files using the X.Y.Z format
 2. Convert .drawio files to SVG and HTML formats
 3. Maintain a changelog of all diagram modifications
 
+## Recent Fixes
+
+The GitHub Actions workflows have been updated to fix the following issues:
+
+1. **Duplicate Authorization Headers**: Fixed the issue where git commands were failing due to duplicate authorization headers by standardizing the authentication method across all workflows.
+   - Removed `git config --local --add http.https://github.com/.extraheader` configurations
+   - Standardized to use `git push "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git"` for all git push operations
+
+2. **CHANGELOG.csv Conflict Resolution**: Implemented a robust system to resolve merge conflicts in the CHANGELOG.csv file automatically.
+   - Added intelligent conflict marker handling to extract and combine entries from both versions
+   - Implemented proper sorting and deduplication of changelog entries
+   - Added cleanup of temporary files used in conflict resolution
+
+3. **Merge Strategy Improvements**:
+   - Added stash/unstash pattern to preserve changes during merges
+   - Implemented better fallback mechanisms when rebasing fails
+   - Added retry logic for git push operations
+   - Added verbose logging to track workflow execution
+
 ## Workflow Features
 
-- **Auto ID Assignment**: Automatically adds "(ID XXX)" to new diagram filenames
+- **Auto ID Assignment**: Automatically adds ID numbers to diagram filenames
 - **Format Conversion**: Converts .drawio files to SVG and HTML formats
 - **Changelog**: Tracks all diagram changes with dates and commit information
+- **Conflict Resolution**: Automatically resolves merge conflicts
 
 ## Using This Repository
 

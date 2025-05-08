@@ -1,1 +1,14 @@
-<mxfile host="app.diagrams.net" modified="2025-05-08T13:31:10Z" agent="Mozilla/5.0" version="21.2.9" type="device"><diagram name="Test Workflow" id="test-workflow"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/><mxCell id="2" value="Test File" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="350" y="230" width="120" height="60" as="geometry"/></mxCell></root></mxGraphModel></diagram></mxfile>
+<?xml version="1.0" encoding="UTF-8"?>
+<mxfile host="Electron" modified="2024-05-02T14:30:00.000Z" agent="5.0 (Macintosh)" version="14.6.13" etag="test">
+  <diagram id="test-diagram" name="Workflow Test">
+    <mxGraphModel dx="1186" dy="779" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="2" value="Test Box" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" parent="1" vertex="1">
+          <mxGeometry x="360" y="230" width="120" height="60" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
