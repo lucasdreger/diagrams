@@ -283,24 +283,33 @@ jobs:
             
             # Focus on CHANGELOG.csv which is the most common conflict
             if git status | grep -q "CHANGELOG.csv"; then
-              echo "Resolving conflict in CHANGELOG.csv..."
+              echo "Resolving CHANGELOG.csv conflict..."
               
-              # Get our version (HEAD)
-              git show :2:html_files/CHANGELOG.csv > /tmp/ours_changelog.csv
+              # Create a backup of the conflicted file
+              cp html_files/CHANGELOG.csv html_files/CHANGELOG.csv.backup
               
-              # Get their version (from remote)
-              git show :3:html_files/CHANGELOG.csv > /tmp/theirs_changelog.csv
+              # Extract the header (first line)
+              head -n 1 html_files/CHANGELOG.csv.backup > html_files/CHANGELOG.csv.header
               
-              # Combine both files (skip header from the second file)
-              head -n 1 /tmp/ours_changelog.csv > /tmp/merged_changelog.csv
-              (tail -n +2 /tmp/ours_changelog.csv && tail -n +2 /tmp/theirs_changelog.csv) | sort | uniq >> /tmp/merged_changelog.csv
+              # Extract all content between conflict markers and combine
+              grep -v "^<<<<<<< HEAD$" html_files/CHANGELOG.csv.backup | 
+              grep -v "^=======$" | 
+              grep -v "^>>>>>>> " | 
+              grep -v "^$" > html_files/CHANGELOG.csv.content
               
-              # Replace the conflicted file with our merged version
-              cp /tmp/merged_changelog.csv html_files/CHANGELOG.csv
+              # Remove duplicate headers from the content
+              grep -v "^Date,Time" html_files/CHANGELOG.csv.content > html_files/CHANGELOG.csv.clean
               
-              # Mark the conflict as resolved
+              # Combine header with unique entries
+              cat html_files/CHANGELOG.csv.header > html_files/CHANGELOG.csv
+              cat html_files/CHANGELOG.csv.clean | sort -u >> html_files/CHANGELOG.csv
+              
+              # Mark as resolved
               git add html_files/CHANGELOG.csv
-              echo "CHANGELOG.csv conflict resolved automatically."
+              echo "CHANGELOG.csv conflict resolved automatically"
+              
+              # Clean up temp files
+              rm -f html_files/CHANGELOG.csv.backup html_files/CHANGELOG.csv.header html_files/CHANGELOG.csv.content html_files/CHANGELOG.csv.clean
             else
               echo "Conflicts detected in files other than CHANGELOG.csv."
               echo "Please check the workflow logs and resolve conflicts manually."

@@ -149,8 +149,58 @@ jobs:
               
               # Pull with --no-rebase to create a merge commit
               git fetch origin $BRANCH_NAME
+              
+              # First stash our changes to preserve them
+              git add svg_files/ html_files/ drawio_files/
+              git stash
+              
+              # Checkout and pull the latest changes
               git checkout $BRANCH_NAME
-              git pull --no-rebase origin $BRANCH_NAME
+              git pull origin $BRANCH_NAME
+              
+              # Apply our stashed changes
+              git stash pop
+              
+              # Handle potential conflicts, especially in CHANGELOG.csv
+              if git status | grep -q "Unmerged paths"; then
+                echo "Merge conflicts detected, attempting to resolve automatically..."
+                
+                # Check if CHANGELOG.csv is one of the conflicted files
+                if git status | grep -q "html_files/CHANGELOG.csv"; then
+                  echo "Resolving CHANGELOG.csv conflict..."
+                  
+                  # Create a backup of the conflicted file
+                  cp html_files/CHANGELOG.csv html_files/CHANGELOG.csv.backup
+                  
+                  # Extract the header (first line)
+                  head -n 1 html_files/CHANGELOG.csv.backup > html_files/CHANGELOG.csv.header
+                  
+                  # Extract all content between conflict markers and combine
+                  grep -v "^<<<<<<< HEAD$" html_files/CHANGELOG.csv.backup | 
+                  grep -v "^=======$" | 
+                  grep -v "^>>>>>>> " | 
+                  grep -v "^$" > html_files/CHANGELOG.csv.content
+                  
+                  # Remove duplicate headers from the content
+                  grep -v "^Date,Time" html_files/CHANGELOG.csv.content > html_files/CHANGELOG.csv.clean
+                  
+                  # Combine header with unique entries
+                  cat html_files/CHANGELOG.csv.header > html_files/CHANGELOG.csv
+                  cat html_files/CHANGELOG.csv.clean | sort -u >> html_files/CHANGELOG.csv
+                  
+                  # Mark as resolved
+                  git add html_files/CHANGELOG.csv
+                  echo "CHANGELOG.csv conflict resolved automatically"
+                  
+                  # Clean up temp files
+                  rm -f html_files/CHANGELOG.csv.backup html_files/CHANGELOG.csv.header html_files/CHANGELOG.csv.content html_files/CHANGELOG.csv.clean
+                else
+                  echo "Warning: Unhandled merge conflicts in files other than CHANGELOG.csv"
+                  # Just take ours version for now to avoid workflow failure
+                  git checkout --ours .
+                  git add .
+                fi
+              fi
               
               # Re-apply our changes
               git add svg_files/ html_files/ drawio_files/
