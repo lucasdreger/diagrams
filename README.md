@@ -19,8 +19,15 @@ The GitHub Actions workflows have been updated to fix the following issues:
    - Implemented proper sorting and deduplication of changelog entries
    - Added cleanup of temporary files used in conflict resolution
 
-3. **Merge Strategy Improvements**:
-   - Added stash/unstash pattern to preserve changes during merges
+3. **Enhanced CHANGELOG.csv Conflict Resolution**: Further improved the conflict resolution process to be more reliable.
+   - Simplified the resolution approach to avoid using multiple temporary files
+   - Added direct header detection and preservation
+   - Improved handling of merge conflicts by using a more straightforward approach
+   - Fixed issues with conflicted files by directly manipulating the content rather than relying on git commands
+
+4. **Merge Strategy Improvements**:
+   - Replaced stash/unstash pattern with a more reliable direct merge approach
+   - Improved conflict resolution for non-CHANGELOG files
    - Implemented better fallback mechanisms when rebasing fails
    - Added retry logic for git push operations
    - Added verbose logging to track workflow execution
