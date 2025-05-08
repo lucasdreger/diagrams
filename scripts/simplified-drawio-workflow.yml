@@ -211,31 +211,7 @@ jobs:
               # Re-apply our changes
               git add svg_files/ html_files/ drawio_files/
               git commit -m "Auto convert and ID assignment for Draw.io diagrams (merge commit) [skip ci]"
-              
-              # Push with retry mechanism
-              MAX_RETRIES=3
-              RETRY_COUNT=0
-              PUSH_SUCCESS=false
-              
-              while [ $RETRY_COUNT -lt $MAX_RETRIES ] && [ "$PUSH_SUCCESS" != "true" ]; do
-                RETRY_COUNT=$((RETRY_COUNT+1))
-                echo "Pushing changes to remote (attempt $RETRY_COUNT/$MAX_RETRIES)..."
-                
-                if git push "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" $BRANCH_NAME; then
-                  echo "Changes committed and pushed successfully using merge strategy"
-                  PUSH_SUCCESS=true
-                else
-                  if [ $RETRY_COUNT -lt $MAX_RETRIES ]; then
-                    echo "Push failed, retrying in 5 seconds..."
-                    sleep 5
-                    # Pull again to make sure we're up to date
-                    git pull origin $BRANCH_NAME --no-edit
-                  else
-                    echo "Failed to push changes after $MAX_RETRIES attempts"
-                    exit 1
-                  fi
-                fi
-              done
+              git push "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" $BRANCH_NAME
             fi
           else
             echo "No changes to commit"

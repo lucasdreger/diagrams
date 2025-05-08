@@ -32,13 +32,6 @@ The GitHub Actions workflows have been updated to fix the following issues:
    - Added retry logic for git push operations
    - Added verbose logging to track workflow execution
 
-5. **Improved Conflict Resolution Strategy (Latest Update)**:
-   - Added comprehensive diagnostic information during conflict resolution
-   - Implemented smarter CSV conflict handling to properly preserve header and entries
-   - Added separate handling for CHANGELOG.csv and other conflicted files
-   - Added retry mechanism for push operations with automatic conflict resolution on retry
-   - Enhanced error handling and reporting across all workflow steps
-
 ## Workflow Features
 
 - **Auto ID Assignment**: Automatically adds ID numbers to diagram filenames
