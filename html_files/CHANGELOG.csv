@@ -1,4 +1,7 @@
 Date,Time,User,Diagram,Action,File,Commit Message,Version,Commit Hash
+001","1.0","auto"
+001)","Added ID Counter file not found, scanning existing files...
+001)","ID Added","25 → 25 (ID Counter file not found, scanning existing files...
 02.05.2025,21:00:40,"Lucas Dreger","1.1.1. SAP Cloud Simplified","Modified (Update)","1.1.1. SAP Cloud Simplified.drawio to 1.1.1. SAP Cloud Simplified.html","Update 1.1.1. SAP Cloud Simplified.drawio","1.8","beb7793"
 05.05.2025,06:17:33,"Lucas Dreger","3.2.1. SAP Cloud Simplified","Modified (Update)","3.2.1. SAP Cloud Simplified.drawio to 3.2.1. SAP Cloud Simplified.html","Update 3.2.1. SAP Cloud Simplified.drawio","1.1","de49b62"
 05.05.2025,07:29:33,"Lucas Dreger","3.1.2. SAP Cloud Simplified","Modified (Update)","3.1.2. SAP Cloud Simplified.drawio to 3.1.2. SAP Cloud Simplified.html","Rename 3.2.1. SAP Cloud Simplified.drawio to 3.1.2. SAP Cloud Simplified.drawio","1.2","62464a5"
@@ -8,17 +11,7 @@ Date,Time,User,Diagram,Action,File,Commit Message,Version,Commit Hash
 05.05.2025,09:01:51,"Lucas Dreger","3.1 Test","Modified (Update)","3.1 Test.drawio to 3.1 Test.html","Added 3.1 Test.drawio","1.1","447bdb1"
 07.05.2025,17:18:08,"25","drawio_files/25.drawio","","Update 25.drawio","b9fa355"
 07.05.2025,17:58:03,"25","drawio_files/25.drawio","","Update 25.drawio","a012933"
-<<<<<<< HEAD
 07.05.2025,19:10:24,"25","drawio_files/25.drawio","","Update 25.drawio","2ed754f"
-=======
-08.05.2025,11:35:26,"Lucas Dreger","25 (ID Counter file not found, scanning existing files...
-Saved next ID counter: 1
-001)","ID Added","25 → 25 (ID Counter file not found, scanning existing files...
-Saved next ID counter: 1
-001)","Added ID Counter file not found, scanning existing files...
-Saved next ID counter: 1
-001","1.0","auto"
->>>>>>> ae9338d (Add scripts for managing diagram IDs and create a new Draw.io diagram)
 08.05.2025,09:54:48,"GitHub Actions","3.1 SAP Cloud Authentication (ID 007)","ID Added","3.1 SAP Cloud Authentication → 3.1 SAP Cloud Authentication (ID 007)","Added ID 007","1.0","auto","007"
 08.05.2025,09:54:48,"GitHub Actions","3.1 Test (ID 008)","ID Added","3.1 Test → 3.1 Test (ID 008)","Added ID 008","1.0","auto","008"
 08.05.2025,09:54:48,"GitHub Actions","3.1.1. SAP Cloud Simplified (ID 009)","ID Added","3.1.1. SAP Cloud Simplified → 3.1.1. SAP Cloud Simplified (ID 009)","Added ID 009","1.0","auto","009"
@@ -34,6 +27,7 @@ Saved next ID counter: 1
 08.05.2025,11:26:12,"27","drawio_files/27.drawio","","Added 27.drawio","ebb9608"
 08.05.2025,11:31:41,"workflow_test_fixed","drawio_files/workflow_test_fixed.drawio","","Add test file to test workflow","99756fe"
 08.05.2025,11:33:17,"28","drawio_files/28.drawio","","Added 28.drawio","3c363aa"
+08.05.2025,11:35:26,"Lucas Dreger","25 (ID Counter file not found, scanning existing files...
 08.05.2025,14:21:20,"GitHub Actions","workflow_test_fixed (ID 012)","ID Added","workflow_test_fixed → workflow_test_fixed (ID 012)","Added ID 012","1.0","auto","012"
 08.05.2025,14:21:27,"GitHub Actions","test_workflow_fix (ID 004)","Converted","test_workflow_fix (ID 004)","Converted to SVG/HTML","1.0","30b4349","004"
 08.05.2025,14:25:51,"conflict_resolution_test","drawio_files/conflict_resolution_test.drawio","","Add test diagram to verify improved CHANGELOG.csv conflict resolution","0d904d2"
@@ -41,3 +35,5 @@ Saved next ID counter: 1
 08.05.2025,17:29:42,"3.5 Advanced Test","drawio_files/3.5 Advanced Test.drawio","","Add test diagram to verify advanced CHANGELOG.csv conflict resolution","cbb6ff7"
 08.05.2025,17:31:01,"11","drawio_files/11.drawio","","Added 11.drawio","92b3136"
 09.05.2025,11:47:47,"GitHub Actions","3.7 Fixed Workflow Test (ID 013)","ID Added","3.7 Fixed Workflow Test → 3.7 Fixed Workflow Test (ID 013)","Added ID 013","1.0","auto","013"
+09.05.2025,11:47:54,"3.7 Fixed Workflow Test","drawio_files/3.7 Fixed Workflow Test.drawio","","Add test diagram for fixed workflow","65e20f5"
+Saved next ID counter: 1
