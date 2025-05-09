@@ -332,19 +332,18 @@ jobs:
               # Abort the rebase and try a different approach
               git rebase --abort
               
-              # Pull with --no-rebase to create a merge commit instead
-              git fetch origin $BRANCH_NAME
+              # Force merge strategy explicitly to handle divergent branch error
+              echo "Setting git pull strategy to merge temporarily"
+              git config pull.rebase false
               
-              # First stash our changes to preserve them
-              git add svg_files/ html_files/ drawio_files/
-              git stash
+              # Force checkout of our branch (this preserves our changes)
+              git checkout -f $BRANCH_NAME
               
-              # Checkout and pull the latest changes
-              git checkout $BRANCH_NAME
-              git pull origin $BRANCH_NAME
+              # Do a merge (which might have conflicts but that's expected)
+              git merge origin/$BRANCH_NAME || true
               
-              # Apply our stashed changes
-              git stash pop
+              # Reset the pull strategy to default
+              git config --unset pull.rebase
               
               # Handle potential conflicts
               if git status | grep -q "Unmerged paths"; then
@@ -361,35 +360,60 @@ jobs:
                 if git status | grep -q "html_files/CHANGELOG.csv"; then
                   echo "Resolving CHANGELOG.csv conflict..."
                   
-                  # More robust approach to handle CSV conflicts
-                  # Get the original header 
-                  HEADER=$(grep "^Date,Time" html_files/CHANGELOG.csv || echo "Date,Time,User,Diagram,Action,File,Commit Message,Version,Commit Hash,ID")
+                  # Ultra robust approach to handle CSV conflicts
+                  echo "Extracting conflict information from CHANGELOG.csv..."
+                  
+                  # Create fresh backup
+                  cp html_files/CHANGELOG.csv html_files/CHANGELOG.csv.conflicted
+                  
+                  # Try different strategies, starting with the most reliable one
+                  
+                  # Strategy 1: Extract header and sort entries excluding conflict markers
+                  echo "Strategy 1: Extract header and sort entries"
+                  # Get the original header, with several fallback options
+                  HEADER=$(grep -m 1 "^Date,Time" html_files/CHANGELOG.csv.conflicted || 
+                          grep -m 1 "Date,Time" html_files/CHANGELOG.csv.conflicted || 
+                          echo "Date,Time,User,Diagram,Action,File,Commit Message,Version,Commit Hash,ID")
                   
                   # Save header as first line
                   echo "$HEADER" > html_files/CHANGELOG.csv.resolved
                   
                   # Extract all entries that are not conflict markers and not the header
-                  cat html_files/CHANGELOG.csv | grep -v "^<<<<<<< " | grep -v "^=======$" | grep -v "^>>>>>>> " | grep -v "^Date,Time" | sort | uniq >> html_files/CHANGELOG.csv.resolved
+                  cat html_files/CHANGELOG.csv.conflicted | 
+                    grep -v "^<<<<<<< " | 
+                    grep -v "^=======$" | 
+                    grep -v "^>>>>>>> " | 
+                    grep -v "^Date,Time" | 
+                    sort | uniq >> html_files/CHANGELOG.csv.resolved
                   
                   # Replace conflicted file with resolved version
-                  mv html_files/CHANGELOG.csv.resolved html_files/CHANGELOG.csv
+                  cp html_files/CHANGELOG.csv.resolved html_files/CHANGELOG.csv
+                  
+                  # Strategy 2: If that fails, create a completely new file
+                  if ! grep -q "," html_files/CHANGELOG.csv.resolved; then
+                    echo "Strategy 1 failed, trying Strategy 2: Create new file"
+                    echo "Date,Time,User,Diagram,Action,File,Commit Message,Version,Commit Hash,ID" > html_files/CHANGELOG.csv
+                    date +"%-d.%-m.%Y,%H:%M:%S,github-actions,Resolution,Auto-fixed,CHANGELOG.csv,Fixed conflict,1.0,${{ github.sha }}" >> html_files/CHANGELOG.csv
+                  fi
                   
                   # Mark as resolved
                   git add html_files/CHANGELOG.csv
-                  echo "CHANGELOG.csv conflict resolved automatically"
+                  echo "✅ CHANGELOG.csv conflict resolved successfully"
+                  
+                  # Clean up temporary files
+                  rm -f html_files/CHANGELOG.csv.conflicted html_files/CHANGELOG.csv.resolved
                 fi
                 
                 # Handle other conflicts
                 UNMERGED_FILES=$(git diff --name-only --diff-filter=U | grep -v "html_files/CHANGELOG.csv" || echo "")
                 if [ -n "$UNMERGED_FILES" ]; then
-                  echo "Resolving conflicts in other files..."
-                  echo "$UNMERGED_FILES" | while read -r file; do
-                    echo "Resolving conflict in: $file"
-                    # For files other than CHANGELOG.csv, we'll keep our changes
-                    git checkout --ours "$file"
-                    git add "$file"
-                  done
-                  echo "Other conflicts resolved"
+                  echo "Resolving conflicts in other files by preferring our changes..."
+                  
+                  # This makes the workflow continue even with conflicts in other files
+                  # by preferring our versions
+                  git checkout --ours $(git diff --name-only --diff-filter=U)
+                  git add $(git diff --name-only --diff-filter=U)
+                  echo "✓ Resolved conflicts by using our versions of the files"
                 fi
               fi
               
