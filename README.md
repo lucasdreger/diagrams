@@ -49,6 +49,14 @@ The GitHub Actions workflows have been updated to fix the following issues:
    - Improved conflict resolution for non-CHANGELOG files
    - Implemented better fallback mechanisms when rebasing fails
    - Added retry logic for git push operations
+
+8. **Improved Modify/Delete Conflict Resolution**:
+   - Added intelligent handling of modify/delete conflicts for renamed files
+   - Added detection for files renamed with ID pattern (e.g., `file.drawio` → `file (ID 001).drawio`)
+   - Implemented smart resolution strategy based on file rename detection
+   - Fixed the error when deleted files in our branch cannot be checked out with `--ours`
+   - Added robust fallback for handling conflicts in both workflow files
+   - Created a test script to verify modify/delete conflict resolution
    - Added verbose logging to track workflow execution
 
 ## Workflow Features
