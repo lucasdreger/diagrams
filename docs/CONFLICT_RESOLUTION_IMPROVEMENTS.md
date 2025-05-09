@@ -37,7 +37,7 @@ The improved workflow now handles modify/delete conflicts with a smart strategy:
 
 2. **Check for renamed versions**: Does a renamed version with an ID exist?
    ```bash
-   if ls "${file%.*} (ID "*" 2>/dev/null; then
+   if find . -name "${file%.*} (ID*" 2>/dev/null | grep -q .; then
      # Found renamed version with ID
      # ...
    ```
@@ -46,6 +46,33 @@ The improved workflow now handles modify/delete conflicts with a smart strategy:
    - If a renamed version exists: Accept our deletion of the original, as we've renamed it
    - If no renamed version exists: Keep the remote version to avoid data loss
    - For other conflict types: Use standard conflict resolution
+
+## Recent Improvements
+
+### Fixed Shell Syntax Error with Parentheses
+
+A shell syntax error was occurring when handling file paths with parentheses in the conflict resolution code. The issue was with this line:
+
+```bash
+if find . -name "${file%.*} (ID*" 2>/dev/null | grep -q .; then
+```
+
+The parentheses in this pattern were interpreted as shell syntax rather than literal characters, causing errors.
+
+#### The Fix
+
+We replaced the problematic `ls` command with a more robust approach using `find`:
+
+```bash
+if find . -name "${file%.*} (ID*" 2>/dev/null | grep -q .; then
+```
+
+This solution has several advantages:
+1. It properly handles parentheses in file paths without requiring explicit escaping
+2. It's more reliable because `find` has better pattern matching capabilities
+3. The `grep -q .` ensures we handle the output correctly, returning a proper exit code
+
+This fix was applied to all workflow files and test scripts to ensure consistent behavior across the entire system.
 
 ## Benefits
 

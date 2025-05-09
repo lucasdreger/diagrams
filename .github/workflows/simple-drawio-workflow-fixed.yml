@@ -254,8 +254,7 @@ jobs:
                 BASE_NAME=$(basename "$file" .html)
                 BASE_NAME=${BASE_NAME%.svg} # Remove .svg extension if present
                 
-                # Look for renamed files with ID pattern
-                      if find . -name "${file%.*} (ID*" 2>/dev/null | grep -q .; then
+                # Look for renamed files with ID pattern                      if find . -name "${file%.*} (ID*" 2>/dev/null | grep -q .; then
                   echo "Found renamed version with ID, accepting our deletion of the original"
                   git rm -f "$file" || true
                 else

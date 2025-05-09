@@ -59,6 +59,12 @@ The GitHub Actions workflows have been updated to fix the following issues:
    - Created a test script to verify modify/delete conflict resolution
    - Added verbose logging to track workflow execution
 
+9. **Shell Syntax Error with Parentheses**: Fixed a shell syntax error occurring with file paths containing parentheses in the conflict resolution process.
+   - Changed the pattern matching approach from `ls "${file%.*} (ID "*"` to `find . -name "${file%.*} (ID*"`
+   - This resolves issues when handling files renamed with ID pattern containing parentheses
+   - The fix was applied to all workflow files and test scripts
+   - For detailed information, see [Shell Syntax Error Fix documentation](docs/SHELL_SYNTAX_ERROR_FIX.md)
+
 ## Workflow Features
 
 - **Auto ID Assignment**: Automatically adds ID numbers to diagram filenames

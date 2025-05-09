@@ -96,12 +96,12 @@ else
             
             # Check if the file is a modify/delete conflict
             if git status | grep -q "deleted by us:.*$file"; then
-                echo "Detected modify/delete conflict for $file (file deleted in our changes)"
+                echo "Detected modify/delete conflict for $file \(file deleted in our changes\)"
                 # Check if we have a renamed version (with ID) of this file
                 BASE_NAME=$(basename "$file" | sed 's/\.[^.]*$//')
                 
                 # Look for renamed files with ID pattern
-                if ls "${file%.*} (ID "*" 2>/dev/null; then
+                if find . -name "${file%.*} (ID*" 2>/dev/null | grep -q .; then
                     echo "Found renamed version with ID, accepting our deletion of the original"
                     git rm -f "$file" || true
                 else
@@ -109,7 +109,7 @@ else
                     git add "$file" || true
                 fi
             elif git status | grep -q "deleted by them:.*$file"; then
-                echo "Detected modify/delete conflict for $file (file deleted in their changes)"
+                echo "Detected modify/delete conflict for $file \(file deleted in their changes\)"
                 # We modified it but they deleted it - keep our version
                 git add "$file"
             else
@@ -133,12 +133,7 @@ else
         echo "$HEADER" > html_files/CHANGELOG.csv.resolved
         
         # Extract all entries that are not conflict markers and not the header
-        cat html_files/CHANGELOG.csv | 
-            grep -v "^<<<<<<< " | 
-            grep -v "^=======$" | 
-            grep -v "^>>>>>>> " | 
-            grep -v "^Date,Time" | 
-            sort | uniq >> html_files/CHANGELOG.csv.resolved
+        grep -v "^<<<<" html_files/CHANGELOG.csv | grep -v "^====" | grep -v "^>>>>" | grep -v "^Date,Time" | sort | uniq >> html_files/CHANGELOG.csv.resolved
         
         # Replace conflicted file with resolved version
         cp html_files/CHANGELOG.csv.resolved html_files/CHANGELOG.csv
