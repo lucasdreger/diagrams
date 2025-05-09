@@ -25,7 +25,19 @@ The GitHub Actions workflows have been updated to fix the following issues:
    - Improved handling of merge conflicts by using a more straightforward approach
    - Fixed issues with conflicted files by directly manipulating the content rather than relying on git commands
 
-4. **Merge Strategy Improvements**:
+4. **Divergent Branches Fix**: Added explicit handling for the divergent branches error that was causing workflow failures.
+   - Added explicit `git config pull.rebase false` settings during merge operations
+   - Implemented proper cleanup by unsetting temporary git configurations
+   - Added diagnostic reporting for merge conflicts
+   - Created test scripts to verify conflict resolution strategies
+
+5. **Multi-strategy Conflict Resolution**: Implemented a fallback strategy system for CHANGELOG.csv conflicts.
+   - Primary strategy extracts and deduplicates entries from conflicted files
+   - Secondary strategy creates a fresh CHANGELOG.csv if extraction fails
+   - Improved handling of complex merge scenarios
+   - Added better error handling and reporting
+
+6. **Merge Strategy Improvements**:
    - Replaced stash/unstash pattern with a more reliable direct merge approach
    - Improved conflict resolution for non-CHANGELOG files
    - Implemented better fallback mechanisms when rebasing fails
