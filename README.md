@@ -65,6 +65,12 @@ The GitHub Actions workflows have been updated to fix the following issues:
    - The fix was applied to all workflow files and test scripts
    - For detailed information, see [Shell Syntax Error Fix documentation](docs/SHELL_SYNTAX_ERROR_FIX.md)
 
+10. **Ubuntu 24.04 (Noble) Compatibility**: Fixed package compatibility issues for workflows running on Ubuntu 24.04 (Noble).
+   - Updated audio library dependency from `libasound2` to `libasound2t64` for Ubuntu Noble
+   - Added version detection to maintain compatibility with older Ubuntu versions
+   - Applied the fix to all workflow files to ensure consistency
+   - For detailed information, see [Package Compatibility Fix documentation](docs/PACKAGE_COMPATIBILITY_FIX.md)
+
 ## Workflow Features
 
 - **Auto ID Assignment**: Automatically adds ID numbers to diagram filenames

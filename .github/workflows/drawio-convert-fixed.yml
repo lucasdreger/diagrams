@@ -102,7 +102,14 @@ jobs:
           echo "DISPLAY=$DISPLAY"
           
           # Install dependencies for electron
-          sudo apt-get install -y libxshmfence1 libgbm1 libasound2
+          # Handle different package names across Ubuntu versions
+          if grep -q "noble" /etc/os-release; then
+            echo "Detected Ubuntu Noble (24.04), using libasound2t64 package"
+            sudo apt-get install -y libxshmfence1 libgbm1 libasound2t64
+          else
+            echo "Using standard audio package for earlier Ubuntu versions"
+            sudo apt-get install -y libxshmfence1 libgbm1 libasound2
+          fi
           
           # Add some debug info
           echo "Node version: $(node --version)"
