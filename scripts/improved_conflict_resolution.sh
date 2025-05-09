@@ -90,7 +90,7 @@ if ! git diff --staged --quiet; then
         if ! grep -q "," html_files/CHANGELOG.csv.resolved; then
           echo "Strategy 1 failed, trying Strategy 2: Create new file"
           echo "Date,Time,User,Diagram,Action,File,Commit Message,Version,Commit Hash,ID" > html_files/CHANGELOG.csv
-          date +"%-d.%-m.%Y,%H:%M:%S,github-actions,Resolution,Auto-fixed,CHANGELOG.csv,Fixed conflict,1.0,${GITHUB_SHA}" >> html_files/CHANGELOG.csv
+          date +"%-d.%-m.%Y,%H:%M:%S,github-actions,Resolution,Auto-fixed,CHANGELOG.csv,Fixed conflict,1.0,${GITHUB_SHA},auto" >> html_files/CHANGELOG.csv
         fi
         
         # Mark as resolved regardless of strategy

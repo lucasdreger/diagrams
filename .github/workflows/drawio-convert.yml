@@ -145,7 +145,7 @@ jobs:
           
           # Initialize CSV changelog with headers if it doesn't exist - now with commit hash column
           if [ ! -f "html_files/CHANGELOG.csv" ]; then
-            echo "Date,Time,User,Diagram,Action,File,Commit Message,Version,Commit Hash" > html_files/CHANGELOG.csv
+            echo "Date,Time,User,Diagram,Action,File,Commit Message,Version,Commit Hash,ID" > html_files/CHANGELOG.csv
           fi
           # No longer creating changelog in svg_files folder
 
@@ -233,8 +233,26 @@ jobs:
                 echo '</body>
           </html>' >> "$output_html"
                 
-                # Add simple changelog entry
-                echo "$(date +"%d.%m.%Y"),$(date +"%H:%M:%S"),\"$base\",\"$file\",\"\",\"$(git log -1 --format="%s" HEAD)\",\"$(git log -1 --format="%h" HEAD)\"" >> html_files/CHANGELOG.csv
+                # Extract ID from the filename if present
+                FILE_ID=""
+                if [[ "$base" =~ \(ID[[:space:]]+([0-9]+)\)$ ]]; then
+                  FILE_ID="${BASH_REMATCH[1]}"
+                fi
+                
+                # Determine if file is new or modified
+                if git ls-files --error-unmatch "$file" &>/dev/null; then
+                  ACTION="Modified (Update)"
+                else
+                  ACTION="New"
+                fi
+                
+                # Add changelog entry with ID column for new files
+                COMMIT_MSG=$(git log -1 --format="%s" HEAD)
+                COMMIT_HASH=$(git log -1 --format="%h" HEAD)
+                VERSION="1.0"
+                
+                # Format: Date,Time,User,Diagram,Action,File,Commit Message,Version,Commit Hash,ID
+                echo "$(date +"%d.%m.%Y"),$(date +"%H:%M:%S"),\"$base\",\"$file\",\"$ACTION\",\"$file\",\"$COMMIT_MSG\",\"$VERSION\",\"$COMMIT_HASH\",\"$FILE_ID\"" >> html_files/CHANGELOG.csv
                 
                 echo "$file" >> /tmp/processed_files.txt
               else
@@ -394,7 +412,7 @@ jobs:
               if ! grep -q "," html_files/CHANGELOG.csv.resolved; then
                 echo "Strategy 1 failed, trying Strategy 2: Create new file"
                 echo "Date,Time,User,Diagram,Action,File,Commit Message,Version,Commit Hash,ID" > html_files/CHANGELOG.csv
-                date +"%-d.%-m.%Y,%H:%M:%S,github-actions,Resolution,Auto-fixed,CHANGELOG.csv,Fixed conflict,1.0,${{ github.sha }}" >> html_files/CHANGELOG.csv
+                date +"%-d.%-m.%Y,%H:%M:%S,github-actions,Resolution,Auto-fixed,CHANGELOG.csv,Fixed conflict,1.0,${{ github.sha }},auto" >> html_files/CHANGELOG.csv
               fi
               
               # Mark as resolved regardless of strategy
@@ -502,7 +520,7 @@ jobs:
                 if ! grep -q "," html_files/CHANGELOG.csv.resolved; then
                   echo "Strategy 1 failed, trying Strategy 2: Create new file"
                   echo "Date,Time,User,Diagram,Action,File,Commit Message,Version,Commit Hash,ID" > html_files/CHANGELOG.csv
-                  date +"%-d.%-m.%Y,%H:%M:%S,github-actions,Resolution,Auto-fixed,CHANGELOG.csv,Fixed conflict,1.0,${{ github.sha }}" >> html_files/CHANGELOG.csv
+                  date +"%-d.%-m.%Y,%H:%M:%S,github-actions,Resolution,Auto-fixed,CHANGELOG.csv,Fixed conflict,1.0,${{ github.sha }},auto" >> html_files/CHANGELOG.csv
                 fi
                 
                 # Mark as resolved regardless of strategy

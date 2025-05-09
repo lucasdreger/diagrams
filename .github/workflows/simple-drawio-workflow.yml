@@ -252,7 +252,14 @@ jobs:
                 ID="${BASH_REMATCH[1]}"
               fi
               
-              echo "$DATE,$TIME,\"$USER\",\"$base_name\",\"Converted\",\"$base_name\",\"Converted to SVG/HTML\",\"1.0\",\"$HASH\",\"$ID\"" >> "html_files/CHANGELOG.csv"
+              # Determine if file is new or modified
+              if git ls-files --error-unmatch "drawio_files/${base_name}.drawio" &>/dev/null; then
+                ACTION="Modified (Update)"
+              else
+                ACTION="New"
+              fi
+              
+              echo "$DATE,$TIME,\"$USER\",\"$base_name\",\"$ACTION\",\"$base_name\",\"Converted to SVG/HTML\",\"1.0\",\"$HASH\",\"$ID\"" >> "html_files/CHANGELOG.csv"
             fi
           fi
           
@@ -393,7 +400,7 @@ jobs:
                   if ! grep -q "," html_files/CHANGELOG.csv.resolved; then
                     echo "Strategy 1 failed, trying Strategy 2: Create new file"
                     echo "Date,Time,User,Diagram,Action,File,Commit Message,Version,Commit Hash,ID" > html_files/CHANGELOG.csv
-                    date +"%-d.%-m.%Y,%H:%M:%S,github-actions,Resolution,Auto-fixed,CHANGELOG.csv,Fixed conflict,1.0,${{ github.sha }}" >> html_files/CHANGELOG.csv
+                    date +"%-d.%-m.%Y,%H:%M:%S,github-actions,Resolution,Auto-fixed,CHANGELOG.csv,Fixed conflict,1.0,${{ github.sha }},auto" >> html_files/CHANGELOG.csv
                   fi
                   
                   # Mark as resolved

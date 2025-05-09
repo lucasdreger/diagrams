@@ -39,6 +39,13 @@ The GitHub Actions workflows have been updated to fix the following issues:
 
 6. **Merge Strategy Improvements**:
    - Replaced stash/unstash pattern with a more reliable direct merge approach
+   
+7. **ID in CHANGELOG.csv**:
+   - Added automatic inclusion of diagram ID numbers in the CHANGELOG.csv entries
+   - Modified workflow to extract ID from filename when creating changelog entries
+   - Added "New" vs "Modified (Update)" action detection for every file
+   - Added ID column consistently to all CHANGELOG.csv header definitions
+   - Enhanced conflict resolution to preserve IDs during merges
    - Improved conflict resolution for non-CHANGELOG files
    - Implemented better fallback mechanisms when rebasing fails
    - Added retry logic for git push operations

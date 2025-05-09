@@ -167,7 +167,8 @@ The CHANGELOG.csv file has the following columns:
 | Commit Message | The Git commit message associated with the change |
 | Version | The calculated version number (e.g., "1.0", "1.1", "2.0") |
 | Commit Hash | The short Git commit hash for tracking |
+| ID | The diagram ID number (if available in the filename) |
 
-This format is preserved when uploading to SharePoint, ensuring all metadata is available for reference.
+This format is preserved when uploading to SharePoint, ensuring all metadata is available for reference. The ID column is particularly useful for tracking diagrams across different versions and branches.
 
 ## Last Updated: May 2, 2025
