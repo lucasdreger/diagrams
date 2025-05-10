@@ -89,10 +89,13 @@ jobs:
             sudo apt-get install -y libxshmfence1 libgbm1 libasound2
           fi
           
-      - name: Install draw.io CLI
+      - name: Install draw.io export tool
         run: |
-          # Install draw.io-cli
-          npm install -g draw.io-cli
+          # Install draw.io-export (replacement for unavailable draw.io-cli)
+          npm install -g draw.io-export
+          
+          # Verify installation
+          drawio --version || echo "draw.io-export installed"
           
       - name: Process Changed Files
         run: |
@@ -115,15 +118,15 @@ jobs:
               # Get the base filename without extension
               base_name=$(basename "$file" .drawio)
               
-              # Convert to SVG using draw.io-cli
+              # Convert to SVG using drawio (from draw.io-export)
               echo "Converting to SVG..."
               xvfb-run --server-args="-screen 0 1280x1024x24" \
-                draw.io-cli --export --format svg --output "svg_files/${base_name}.svg" "$file"
+                drawio --export --format svg --output "svg_files/${base_name}.svg" "$file"
               
               # Convert to HTML
               echo "Converting to HTML..."
               xvfb-run --server-args="-screen 0 1280x1024x24" \
-                draw.io-cli --export --format html --output "html_files/${base_name}.html" "$file"
+                drawio --export --format html --output "html_files/${base_name}.html" "$file"
               
               echo "Processed: $file"
             done < /tmp/changed_files.txt

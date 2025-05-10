@@ -71,6 +71,12 @@ The GitHub Actions workflows have been updated to fix the following issues:
    - Applied the fix to all workflow files to ensure consistency
    - For detailed information, see [Package Compatibility Fix documentation](docs/PACKAGE_COMPATIBILITY_FIX.md)
 
+11. **Draw.io CLI Compatibility**: Updated workflows to use modern draw.io export tools.
+   - Replaced the deprecated `draw.io-cli` package with the maintained `draw.io-export`
+   - Updated command syntax from `draw.io-cli --export` to `drawio --export`
+   - Ensured consistent usage across both SVG and HTML export operations
+   - For detailed information, see [Draw.io CLI Compatibility Fix documentation](docs/DRAWIO_CLI_COMPATIBILITY_FIX.md)
+
 ## Workflow Features
 
 - **Auto ID Assignment**: Automatically adds ID numbers to diagram filenames

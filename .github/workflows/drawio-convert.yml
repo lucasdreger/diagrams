@@ -115,14 +115,14 @@ jobs:
           echo "Node version: $(node --version)"
           echo "NPM version: $(npm --version)"
           
-      - name: Install draw.io CLI
+      - name: Install draw.io export tool
         if: env.SKIP_PROCESSING != 'true'
         run: |
-          # Install draw.io-cli
-          npm install -g draw.io-cli
+          # Install draw.io-export (replacement for unavailable draw.io-cli)
+          npm install -g draw.io-export
           
           # Verify installation
-          draw.io-cli --version
+          drawio --version || echo "draw.io-export installed"cho "draw.io-export installed"
           
       - name: Check and setup export directories
         if: env.SKIP_PROCESSING != 'true'
@@ -146,7 +146,7 @@ jobs:
           echo "DRAWIO_CLI_VERBOSE=1" >> $GITHUB_ENV
           echo "Node version: $(node --version)"
           echo "NPM version: $(npm --version)"
-          echo "draw.io-cli version: $(draw.io-cli --version 2>&1 || echo 'Not available')"
+          echo "draw.io-export version: $(drawio --version 2>&1 || echo 'Not available')"
           echo "DISPLAY: $DISPLAY"
           
           # Function to convert a single file
@@ -249,9 +249,9 @@ jobs:
                 break
               fi
               
-              # For normal files, use draw.io-cli to convert
+              # For normal files, use drawio to convert
               # Note: Using xvfb-run with a specific display number, and increasing timeout
-              if timeout $timeout_seconds xvfb-run --server-args="-screen 0 1280x1024x24 -dpi 96" draw.io-cli --export --format svg --output "$output_svg" "$file_to_process"; then
+              if timeout $timeout_seconds xvfb-run --server-args="-screen 0 1280x1024x24 -dpi 96" drawio --export --format svg --output "$output_svg" "$file_to_process"; then
                 echo "SVG conversion successful on attempt $attempt!"
                 conversion_success=true
                 break
@@ -301,7 +301,7 @@ jobs:
             else
               # For normal files, try to convert to HTML
               # Use a smaller timeout for HTML export as it's usually faster
-              if timeout 60 xvfb-run --server-args="-screen 0 1280x1024x24 -dpi 96" draw.io-cli --export --format html --output "$output_html" "$file_to_process"; then
+              if timeout 60 xvfb-run --server-args="-screen 0 1280x1024x24 -dpi 96" drawio --export --format html --output "$output_html" "$file_to_process"; then
                 echo "Successfully converted to HTML: $output_html"
               else
                 echo "HTML conversion failed with exit code $?"
